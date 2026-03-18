@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fernandes Têxtil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-brand">
+        <span class="emoji">🧵</span>
+        <span>Fernandes Têxtil</span>
+      </div>
+      <div class="header-user">
+        <strong id="headerNome">-</strong>
+        <span id="headerPerfil" style="color:#40c074;font-size:0.78rem;"></span>
+        <button class="btn-sair" onclick="logout()">Sair</button>
+      </div>
+    </header>
+
+    <div class="nav-wrapper">
+      <nav class="nav" id="mainNav"></nav>
+    </div>
+
+    <main class="content" id="mainContent">
+      <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
