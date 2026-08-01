@@ -1,0 +1,23 @@
+import { executiveSummary, resolvePeriod, filterSales, summarize, sellerPerformance, inactiveCustomers, salesByChannel, topProducts, deltaPercent } from "../src/lib/metrics";
+import { demoSales, demoProducts, demoVariants, demoCustomers, demoExpenses, demoReceivables } from "../src/lib/mock";
+import { demoAlerts } from "../src/lib/alerts";
+
+const s = executiveSummary();
+console.log("produtos:", demoProducts.length, "variações:", demoVariants.length, "clientes:", demoCustomers.length, "vendas:", demoSales.length, "despesas:", demoExpenses.length, "receber:", demoReceivables.length);
+console.log("hoje: fat", s.today.revenue.toFixed(2), "vendas", s.today.salesCount);
+console.log("mês: fat", s.month.revenue.toFixed(2), "lucroBruto", s.month.grossProfit.toFixed(2), "despesasMês", s.monthExpenses.toFixed(2), "líquido", s.netProfit.toFixed(2));
+console.log("meta:", s.goal);
+console.log("estoque:", JSON.stringify(s.stock));
+console.log("receber:", s.receivables.toFixed(2), "pagar:", s.payables.toFixed(2));
+const p30 = resolvePeriod("30d");
+const c = summarize(filterSales(p30.current)); const p = summarize(filterSales(p30.previous));
+console.log("30d fat:", c.revenue.toFixed(0), "vs", p.revenue.toFixed(0), "delta%", deltaPercent(c.revenue, p.revenue)?.toFixed(1));
+console.log("30d lucro:", c.grossProfit.toFixed(0), "vs", p.grossProfit.toFixed(0), "delta%", deltaPercent(c.grossProfit, p.grossProfit)?.toFixed(1), "margem", c.margin.toFixed(1), "antes", p.margin.toFixed(1));
+console.log("canais 30d:", salesByChannel(filterSales(p30.current)).map(x=>`${x.name}: ${x.value.toFixed(0)}`).join(" | "));
+console.log("top produtos:", topProducts(filterSales(p30.current), 3).map(t=>t.name).join(" | "));
+const julSales = summarize(filterSales(resolvePeriod("mes_anterior").current));
+console.log("julho fat:", julSales.revenue.toFixed(0), "ticket", julSales.ticket.toFixed(2), "peças", julSales.pieces);
+console.log("vendedoras julho:", sellerPerformance(filterSales(resolvePeriod("mes_anterior").current)).map(x=>`${x.seller.name}: ${x.revenue.toFixed(0)} (${x.goalPercent.toFixed(0)}% meta)`).join(" | "));
+console.log("clientes inativos 120d:", inactiveCustomers(120).length);
+console.log("alertas:", demoAlerts.length);
+for (const a of demoAlerts) console.log(" -", `[${a.priority}]`, a.title);
