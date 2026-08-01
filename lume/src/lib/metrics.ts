@@ -3,7 +3,6 @@ import {
   dayKey,
   DEMO_TODAY,
   DEMO_TODAY_START,
-  demoDay,
   diffDays,
   monthKey,
 } from "@/lib/dates";

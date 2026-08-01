@@ -5,12 +5,6 @@ const brl = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
-const brlCompact = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
 
 const number = new Intl.NumberFormat("pt-BR");
 
@@ -47,8 +41,15 @@ export function formatBRL(value: number): string {
   return brl.format(value);
 }
 
+/** "R$ 4,5 mil" — implementação própria para render idêntico em qualquer ambiente. */
 export function formatBRLCompact(value: number): string {
-  return brlCompact.format(value);
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1000) {
+    const mil = Math.round((abs / 1000) * 10) / 10;
+    return `${sign}R$ ${String(mil).replace(".", ",")} mil`;
+  }
+  return `${sign}R$ ${Math.round(abs)}`;
 }
 
 export function formatNumber(value: number): string {
