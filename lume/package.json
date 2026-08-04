@@ -9,6 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:demo": "node spa/build.mjs",
     "lint": "eslint"
   },
   "dependencies": {

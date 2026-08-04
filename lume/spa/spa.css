@@ -1,0 +1,21 @@
+@import "../src/app/globals.css";
+
+/* Garante que o Tailwind varra os componentes do app e desta build. */
+@source "../src";
+@source "./main.tsx";
+
+/*
+ * O app Next carrega Geist via `next/font`, que define estas variáveis.
+ * Na build da demo não há servidor de fontes, então a stack do sistema
+ * assume o papel — mantendo o mesmo desenho tipográfico do design system.
+ */
+:root {
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
