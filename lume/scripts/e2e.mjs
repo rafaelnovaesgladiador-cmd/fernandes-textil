@@ -15,6 +15,8 @@ require("module").Module._initPaths();
 const { chromium } = require("playwright-core");
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
+/** A demo em arquivo único roteia por hash: a navegação não gera resposta HTTP. */
+const HASH_MODE = BASE.includes("#");
 const CHROME = "/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell";
 
 const results = [];
@@ -53,6 +55,17 @@ const ROUTES = [
   ["/vitrine", "Vitrine pública"],
 ];
 
+/** Navega respeitando o modo (rota real ou hash da demo em arquivo único). */
+async function goTo(target, route) {
+  if (HASH_MODE) {
+    await target.evaluate((r) => {
+      window.location.hash = r;
+    }, route);
+  } else {
+    await target.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded" });
+  }
+}
+
 const browser = await chromium.launch({ executablePath: CHROME });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await context.newPage();
@@ -67,17 +80,29 @@ page.on("console", (m) => {
   }
 });
 
-await page.goto(`${BASE}/login`);
+await page.goto(HASH_MODE ? BASE : `${BASE}/login`);
 await page.evaluate((s) => localStorage.setItem("lume.session.v1", s), SESSION);
+if (HASH_MODE) await page.reload();
+await page.waitForTimeout(800);
 
 console.log("\n== Rotas ==");
 for (const [route, label] of ROUTES) {
   try {
-    const response = await page.goto(`${BASE}${route}`, {
-      waitUntil: "domcontentloaded",
-      timeout: 45000,
-    });
-    await page.waitForTimeout(1200);
+    let status = 200;
+    if (HASH_MODE) {
+      // Trocar o hash não recarrega a página; força o roteador a reagir.
+      await page.evaluate((r) => {
+        window.location.hash = r;
+      }, route);
+      await page.waitForTimeout(1400);
+    } else {
+      const response = await page.goto(`${BASE}${route}`, {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      });
+      status = response.status();
+      await page.waitForTimeout(1200);
+    }
     const body = await page.evaluate(() => document.body.innerText);
     const broken =
       body.includes("Application error") ||
@@ -85,7 +110,7 @@ for (const [route, label] of ROUTES) {
       body.includes("This page could not be found");
     check(
       `${label} (${route})`,
-      response.status() === 200 && !broken && body.trim().length > 120,
+      status === 200 && !broken && body.trim().length > 120,
       broken ? "erro em tela" : `texto: ${body.trim().length} chars`
     );
   } catch (error) {
@@ -106,7 +131,7 @@ try {
       };
     });
 
-  await page.goto(`${BASE}/vendas/nova`, { waitUntil: "domcontentloaded" });
+  await goTo(page, "/vendas/nova");
   await page.waitForTimeout(1800);
   const before = await readState();
 
@@ -117,10 +142,11 @@ try {
   await page.waitForTimeout(900);
   check("busca de produto abre a seleção de variação", true);
 
-  // 2. Escolhe uma combinação cor × tamanho com estoque ("M · 2 un")
+  // 2. Escolhe uma combinação cor × tamanho disponível (as esgotadas ficam
+  // desabilitadas, então basta pegar o primeiro chip clicável da grade).
   const sizeButton = page
     .locator("button:not([disabled])")
-    .filter({ hasText: /\d+\s*un/ })
+    .filter({ hasText: /^(P|M|G|GG|U)(\s|$)/ })
     .first();
   await sizeButton.click();
   await page.waitForTimeout(500);
@@ -181,7 +207,7 @@ try {
   check("comprovante exibido", /comprovante|venda registrada|#\d/i.test(receipt));
 
   // 5. A venda aparece no histórico
-  await page.goto(`${BASE}/vendas`, { waitUntil: "domcontentloaded" });
+  await goTo(page, "/vendas");
   await page.waitForTimeout(1800);
   const historyState = await readState();
   check("venda persiste no histórico", historyState.sales === afterSale.sales);
@@ -197,11 +223,12 @@ const mobile = await browser.newContext({
 });
 const mpage = await mobile.newPage();
 mpage.on("pageerror", (e) => pageErrors.push(`mobile ${mpage.url()}: ${e.message}`));
-await mpage.goto(`${BASE}/login`);
+await mpage.goto(HASH_MODE ? BASE : `${BASE}/login`);
 await mpage.evaluate((s) => localStorage.setItem("lume.session.v1", s), SESSION);
+if (HASH_MODE) await mpage.reload();
 
 for (const route of ["/visao-geral", "/vendas/nova", "/produtos", "/financeiro", "/vitrine"]) {
-  await mpage.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded" });
+  await goTo(mpage, route);
   await mpage.waitForTimeout(1200);
   const noHScroll = await mpage.evaluate(
     () => document.documentElement.scrollWidth <= window.innerWidth + 2
