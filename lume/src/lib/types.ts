@@ -358,3 +358,131 @@ export interface ActivityLog {
   detail: string;
   date: string;
 }
+
+// ---------------------------------------------------------------------------
+// Compras
+// ---------------------------------------------------------------------------
+
+export interface PurchaseItem {
+  id: string;
+  purchaseId: string;
+  productId: string;
+  variantId: string;
+  quantity: number;
+  unitCost: number;
+}
+
+export type PurchaseStatus = "rascunho" | "pedido" | "recebido" | "cancelado";
+
+export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
+  rascunho: "Rascunho",
+  pedido: "Pedido enviado",
+  recebido: "Recebido",
+  cancelado: "Cancelado",
+};
+
+export interface Purchase {
+  id: string;
+  companyId: string;
+  code: string;
+  supplierId: string;
+  status: PurchaseStatus;
+  total: number;
+  installments: number;
+  date: string;
+  receivedAt?: string;
+  notes?: string;
+  items: PurchaseItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Caixa
+// ---------------------------------------------------------------------------
+
+export type CashMovementType = "abertura" | "sangria" | "reforco" | "fechamento";
+
+export const CASH_MOVEMENT_LABELS: Record<CashMovementType, string> = {
+  abertura: "Abertura",
+  sangria: "Sangria",
+  reforco: "Reforço",
+  fechamento: "Fechamento",
+};
+
+export interface CashMovement {
+  id: string;
+  sessionId: string;
+  type: CashMovementType;
+  amount: number;
+  reason: string;
+  date: string;
+  userName: string;
+}
+
+export interface CashSession {
+  id: string;
+  companyId: string;
+  unitId: string;
+  openedAt: string;
+  closedAt?: string;
+  openingAmount: number;
+  /** Valor contado na conferência do fechamento. */
+  countedAmount?: number;
+  /** Diferença entre o contado e o esperado. */
+  difference?: number;
+  userName: string;
+  movements: CashMovement[];
+}
+
+// ---------------------------------------------------------------------------
+// CRM
+// ---------------------------------------------------------------------------
+
+export type CampaignChannel = "whatsapp" | "instagram" | "email";
+
+export interface Campaign {
+  id: string;
+  companyId: string;
+  name: string;
+  segment: string;
+  channel: CampaignChannel;
+  message: string;
+  recipients: number;
+  status: "rascunho" | "enviada";
+  createdAt: string;
+  sentAt?: string;
+}
+
+export interface CustomerInteraction {
+  id: string;
+  companyId: string;
+  customerId: string;
+  type: "mensagem" | "ligacao" | "atendimento" | "lembrete" | "cupom";
+  note: string;
+  date: string;
+  userName: string;
+}
+
+// ---------------------------------------------------------------------------
+// Configurações da loja
+// ---------------------------------------------------------------------------
+
+export interface CatalogSettings {
+  headline: string;
+  description: string;
+  showPrices: boolean;
+  whatsapp: string;
+  featuredProductIds: string[];
+}
+
+export interface CompanySettings {
+  companyId: string;
+  cardFeePercent: number;
+  taxPercent: number;
+  maxDiscountPercent: number;
+  catalog: CatalogSettings;
+  notifications: {
+    stock: boolean;
+    goal: boolean;
+    finance: boolean;
+  };
+}

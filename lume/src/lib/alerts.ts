@@ -1,54 +1,57 @@
-import { demoDay, monthKey } from "@/lib/dates";
+import { demoDay, monthKey, DEMO_TODAY } from "@/lib/dates";
 import { formatBRL, formatDeltaPercent, formatPercent } from "@/lib/format";
 import {
+  cashFlow,
+  currentGoal,
   deltaPercent,
   filterSales,
   inactiveCustomers,
+  overduePayables,
   resolvePeriod,
   stockSummary,
   summarize,
-  currentGoal,
 } from "@/lib/metrics";
-import { COMPANY_ID, demoExpenses } from "@/lib/mock";
+import type { AppState } from "@/lib/store/state";
 import type { Alert } from "@/lib/types";
 
 /**
- * Central de alertas: cada alerta é DERIVADO da mesma massa de dados que
- * alimenta o Dashboard — os valores citados nos textos são calculados,
- * nunca escritos à mão.
+ * Central de alertas.
+ *
+ * Cada alerta é derivado do estado atual — os valores citados nos textos são
+ * calculados, nunca escritos à mão. Uma venda registrada agora muda os
+ * alertas na mesma hora.
  */
-export function buildAlerts(): Alert[] {
+export function buildAlerts(state: AppState): Alert[] {
   const alerts: Alert[] = [];
-  const stock = stockSummary();
-  const inactive = inactiveCustomers(120);
+  const companyId = state.companyId;
+  const stock = stockSummary(state);
+  const inactive = inactiveCustomers(state, 120);
 
   const last30 = resolvePeriod("30d");
-  const current30 = summarize(filterSales(last30.current));
-  const previous30 = summarize(filterSales(last30.previous));
+  const current30 = summarize(filterSales(state, last30.current));
+  const previous30 = summarize(filterSales(state, last30.previous));
   const revenueDelta = deltaPercent(current30.revenue, previous30.revenue);
   const profitDelta = deltaPercent(current30.grossProfit, previous30.grossProfit);
 
-  const monthRange = resolvePeriod("mes");
-  const monthSummary = summarize(filterSales(monthRange.current));
-  const goal = currentGoal();
+  const monthSummary = summarize(filterSales(state, resolvePeriod("mes").current));
+  const goal = currentGoal(state);
 
-  // Despesas: julho vs junho (últimos meses fechados).
-  const julyExpenses = demoExpenses
-    .filter((e) => monthKey(e.date) === "2026-07")
-    .reduce((sum, e) => sum + e.amount, 0);
-  const juneExpenses = demoExpenses
-    .filter((e) => monthKey(e.date) === "2026-06")
-    .reduce((sum, e) => sum + e.amount, 0);
+  const monthTotal = (key: string) =>
+    state.expenses
+      .filter((e) => monthKey(e.date) === key)
+      .reduce((sum, e) => sum + e.amount, 0);
+  const julyExpenses = monthTotal("2026-07");
+  const juneExpenses = monthTotal("2026-06");
   const expenseDelta = deltaPercent(julyExpenses, juneExpenses);
 
-  const julyCardFees = demoExpenses
+  const julyCardFees = state.expenses
     .filter((e) => monthKey(e.date) === "2026-07" && e.category === "taxas_cartao")
     .reduce((sum, e) => sum + e.amount, 0);
 
   if (stock.stalled.value > 0) {
     alerts.push({
       id: "alr_estoque_parado",
-      companyId: COMPANY_ID,
+      companyId,
       category: "estoque",
       priority: "alta",
       title: `${formatBRL(stock.stalled.value)} estão parados em produtos sem venda há mais de 90 dias`,
@@ -57,7 +60,7 @@ export function buildAlerts(): Alert[] {
       recommendation:
         "Monte uma liquidação com desconto progressivo ou destaque essas peças no catálogo para recuperar o capital.",
       actionLabel: "Ver produtos parados",
-      actionHref: "/estoque",
+      actionHref: "/estoque?analise=parados",
       date: demoDay(0, 8).toISOString(),
       status: "aberto",
     });
@@ -66,7 +69,7 @@ export function buildAlerts(): Alert[] {
   if (stock.lowStockProducts > 0) {
     alerts.push({
       id: "alr_estoque_baixo",
-      companyId: COMPANY_ID,
+      companyId,
       category: "estoque",
       priority: "critica",
       title: `Estoque baixo em ${stock.lowStockProducts} produtos de alto giro`,
@@ -75,7 +78,7 @@ export function buildAlerts(): Alert[] {
       recommendation:
         "Gere a lista de reposição e antecipe o pedido aos fornecedores antes do fim de semana, quando o giro é maior.",
       actionLabel: "Gerar lista de reposição",
-      actionHref: "/estoque",
+      actionHref: "/estoque?analise=reposicao",
       date: demoDay(0, 7).toISOString(),
       status: "aberto",
     });
@@ -89,7 +92,7 @@ export function buildAlerts(): Alert[] {
   ) {
     alerts.push({
       id: "alr_margem",
-      companyId: COMPANY_ID,
+      companyId,
       category: "vendas",
       priority: "alta",
       title:
@@ -101,7 +104,7 @@ export function buildAlerts(): Alert[] {
       recommendation:
         "Revise a política de descontos: limite o percentual por vendedora e concentre promoções apenas nas peças paradas.",
       actionLabel: "Analisar descontos",
-      actionHref: "/relatorios",
+      actionHref: "/relatorios?relatorio=descontos",
       date: demoDay(0, 8, 30).toISOString(),
       status: "aberto",
     });
@@ -110,7 +113,7 @@ export function buildAlerts(): Alert[] {
   if (inactive.length > 0) {
     alerts.push({
       id: "alr_clientes_inativos",
-      companyId: COMPANY_ID,
+      companyId,
       category: "clientes",
       priority: "media",
       title: `${inactive.length} clientes estão sem comprar há mais de 120 dias`,
@@ -118,8 +121,8 @@ export function buildAlerts(): Alert[] {
         "São clientes que já compraram na loja e deixaram de voltar. Reativar quem já conhece a marca custa muito menos do que conquistar clientes novos.",
       recommendation:
         "Crie uma campanha de reativação no WhatsApp com condição exclusiva válida por poucos dias.",
-      actionLabel: "Ver clientes",
-      actionHref: "/clientes",
+      actionLabel: "Ver clientes inativos",
+      actionHref: "/clientes?segmento=inativo",
       date: demoDay(-1, 18).toISOString(),
       status: "aberto",
     });
@@ -128,7 +131,7 @@ export function buildAlerts(): Alert[] {
   if (expenseDelta !== null && expenseDelta > 5) {
     alerts.push({
       id: "alr_despesas",
-      companyId: COMPANY_ID,
+      companyId,
       category: "financeiro",
       priority: "media",
       title: `As despesas cresceram ${formatDeltaPercent(expenseDelta)} em julho`,
@@ -137,7 +140,7 @@ export function buildAlerts(): Alert[] {
       recommendation:
         "Avalie o retorno das campanhas pagas e negocie as taxas da maquininha — juntas, elas explicam a maior parte do aumento.",
       actionLabel: "Analisar despesas",
-      actionHref: "/financeiro",
+      actionHref: "/financeiro?aba=despesas",
       date: demoDay(-2, 10).toISOString(),
       status: "aberto",
     });
@@ -146,7 +149,7 @@ export function buildAlerts(): Alert[] {
   if (julyCardFees > 0) {
     alerts.push({
       id: "alr_taxas",
-      companyId: COMPANY_ID,
+      companyId,
       category: "financeiro",
       priority: "baixa",
       title: `As taxas de cartão consumiram ${formatBRL(julyCardFees)} do resultado de julho`,
@@ -162,14 +165,13 @@ export function buildAlerts(): Alert[] {
   }
 
   if (goal) {
-    const monthProgress = (monthSummary.revenue / goal.revenueTarget) * 100;
-    // 1º dia do mês: projeção simples pela média diária necessária.
+    const percent = (monthSummary.revenue / goal.revenueTarget) * 100;
     alerts.push({
       id: "alr_meta",
-      companyId: COMPANY_ID,
+      companyId,
       category: "metas",
-      priority: monthProgress < 4 ? "media" : "baixa",
-      title: `Meta de agosto: ${formatBRL(goal.revenueTarget)} — ${formatPercent(monthProgress, 1)} atingido`,
+      priority: percent < 4 ? "media" : "baixa",
+      title: `Meta de agosto: ${formatBRL(goal.revenueTarget)} — ${formatPercent(percent, 1)} atingido`,
       explanation: `Para bater a meta, a loja precisa vender em média ${formatBRL(goal.revenueTarget / 26)} por dia útil ao longo do mês.`,
       recommendation:
         "Acompanhe a meta diariamente no Dashboard e reforce as campanhas nos dias de menor movimento (terça e quarta).",
@@ -180,24 +182,65 @@ export function buildAlerts(): Alert[] {
     });
   }
 
-  alerts.push({
-    id: "alr_conta_vencida",
-    companyId: COMPANY_ID,
-    category: "financeiro",
-    priority: "critica",
-    title: "Duplicata de fornecedor vencida há 4 dias",
-    explanation:
-      "A duplicata do pedido de vestidos (NF 7730, Estilo Brás Confecções) venceu em 28/07 e segue em aberto: R$ 1.890,00.",
-    estimatedImpact: 1890,
-    recommendation:
-      "Negocie o pagamento ainda esta semana para evitar juros e proteger o relacionamento com o fornecedor da sua principal categoria.",
-    actionLabel: "Ver contas a pagar",
-    actionHref: "/financeiro",
-    date: demoDay(0, 7, 15).toISOString(),
-    status: "aberto",
-  });
+  // Contas vencidas — derivadas do estado, então somem ao serem pagas.
+  const overdue = overduePayables(state);
+  if (overdue.length > 0) {
+    const total = overdue.reduce((sum, p) => sum + p.amount, 0);
+    const first = overdue[0];
+    alerts.push({
+      id: "alr_conta_vencida",
+      companyId,
+      category: "financeiro",
+      priority: "critica",
+      title:
+        overdue.length === 1
+          ? `Conta vencida: ${first.description}`
+          : `${overdue.length} contas vencidas somam ${formatBRL(total)}`,
+      explanation: `${first.description}${first.supplierName ? ` (${first.supplierName})` : ""} venceu e segue em aberto: ${formatBRL(first.amount)}.`,
+      estimatedImpact: total,
+      recommendation:
+        "Negocie o pagamento ainda esta semana para evitar juros e proteger o relacionamento com o fornecedor.",
+      actionLabel: "Ver contas a pagar",
+      actionHref: "/financeiro?aba=pagar",
+      date: demoDay(0, 7, 15).toISOString(),
+      status: "aberto",
+    });
+  }
 
-  return alerts;
+  // Projeção de caixa negativo nos próximos dias.
+  const flow = cashFlow(state, 7, 21);
+  if (flow.minProjected < 0) {
+    const firstNegative = flow.points.find(
+      (p) => p.date.getTime() >= DEMO_TODAY.getTime() && p.balance < 0
+    );
+    if (firstNegative) {
+      const days = Math.max(
+        1,
+        Math.round(
+          (firstNegative.date.getTime() - DEMO_TODAY.getTime()) / 86_400_000
+        )
+      );
+      alerts.push({
+        id: "alr_caixa_negativo",
+        companyId,
+        category: "financeiro",
+        priority: "alta",
+        title: `O caixa pode ficar negativo nos próximos ${days} dias`,
+        explanation: `Considerando as contas a pagar e a receber já lançadas, o saldo projetado chega a ${formatBRL(flow.minProjected)}.`,
+        estimatedImpact: Math.abs(flow.minProjected),
+        recommendation:
+          "Antecipe recebíveis, renegocie o vencimento das duplicatas maiores ou reforce as vendas com uma ação pontual.",
+        actionLabel: "Ver fluxo de caixa",
+        actionHref: "/financeiro?aba=fluxo",
+        date: demoDay(0, 7, 45).toISOString(),
+        status: "aberto",
+      });
+    }
+  }
+
+  // Aplica as decisões do usuário (resolvido/ignorado) sobre os alertas vivos.
+  return alerts.map((alert) => ({
+    ...alert,
+    status: state.alertStatus[alert.id] ?? alert.status,
+  }));
 }
-
-export const demoAlerts: Alert[] = buildAlerts();

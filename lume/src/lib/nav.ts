@@ -14,13 +14,14 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import type { Permission } from "@/lib/permissions";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  /** Etapa do roadmap em que o módulo fica completo (1 = já nesta entrega). */
-  stage: 1 | 2 | 3 | 4;
+  /** Permissão exigida para ver o item no menu. */
+  permission: Permission;
 }
 
 export interface NavGroup {
@@ -31,38 +32,68 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { label: "Visão geral", href: "/visao-geral", icon: LayoutDashboard, stage: 1 },
-      { label: "Vendas", href: "/vendas", icon: ShoppingBag, stage: 2 },
-      { label: "Caixa", href: "/caixa", icon: Calculator, stage: 3 },
+      {
+        label: "Visão geral",
+        href: "/visao-geral",
+        icon: LayoutDashboard,
+        permission: "dashboard.ver",
+      },
+      { label: "Vendas", href: "/vendas", icon: ShoppingBag, permission: "vendas.ver" },
+      { label: "Caixa", href: "/caixa", icon: Calculator, permission: "caixa.operar" },
     ],
   },
   {
     label: "Operação",
     items: [
-      { label: "Produtos", href: "/produtos", icon: Shirt, stage: 2 },
-      { label: "Estoque", href: "/estoque", icon: Package, stage: 2 },
-      { label: "Compras", href: "/compras", icon: Truck, stage: 3 },
+      { label: "Produtos", href: "/produtos", icon: Shirt, permission: "produtos.ver" },
+      { label: "Estoque", href: "/estoque", icon: Package, permission: "estoque.ver" },
+      { label: "Compras", href: "/compras", icon: Truck, permission: "compras.ver" },
     ],
   },
   {
     label: "Relacionamento",
     items: [
-      { label: "Clientes", href: "/clientes", icon: Users, stage: 2 },
-      { label: "Vendedores", href: "/vendedores", icon: UsersRound, stage: 2 },
-      { label: "Catálogo", href: "/catalogo", icon: BookOpen, stage: 4 },
+      { label: "Clientes", href: "/clientes", icon: Users, permission: "clientes.ver" },
+      {
+        label: "Vendedores",
+        href: "/vendedores",
+        icon: UsersRound,
+        permission: "vendedores.ver",
+      },
+      {
+        label: "Catálogo",
+        href: "/catalogo",
+        icon: BookOpen,
+        permission: "catalogo.gerenciar",
+      },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { label: "Financeiro", href: "/financeiro", icon: Wallet, stage: 3 },
-      { label: "Relatórios", href: "/relatorios", icon: ChartColumn, stage: 3 },
-      { label: "Alertas", href: "/alertas", icon: Bell, stage: 1 },
+      {
+        label: "Financeiro",
+        href: "/financeiro",
+        icon: Wallet,
+        permission: "financeiro.ver",
+      },
+      {
+        label: "Relatórios",
+        href: "/relatorios",
+        icon: ChartColumn,
+        permission: "relatorios.ver",
+      },
+      { label: "Alertas", href: "/alertas", icon: Bell, permission: "alertas.ver" },
     ],
   },
   {
     items: [
-      { label: "Configurações", href: "/configuracoes", icon: Settings, stage: 1 },
+      {
+        label: "Configurações",
+        href: "/configuracoes",
+        icon: Settings,
+        permission: "configuracoes.ver",
+      },
     ],
   },
 ];

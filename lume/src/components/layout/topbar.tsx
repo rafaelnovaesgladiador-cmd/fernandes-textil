@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand";
@@ -8,11 +9,10 @@ import { NotificationsMenu } from "./notifications-menu";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 import { SearchDialog } from "./search-dialog";
-import { useComingSoon } from "@/components/coming-soon";
 
 export function Topbar() {
+  const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
-  const comingSoon = useComingSoon();
 
   // Atalho de teclado "/" abre a busca global.
   useEffect(() => {
@@ -59,13 +59,7 @@ export function Topbar() {
 
       <Button
         className="hidden sm:inline-flex"
-        onClick={() =>
-          comingSoon.show(
-            "Nova venda",
-            2,
-            "O fluxo completo de venda — produto, cor, tamanho, cliente, desconto, pagamento misto e baixa de estoque — é o coração da Etapa 2."
-          )
-        }
+        onClick={() => router.push("/vendas/nova")}
       >
         <Plus /> Nova venda
       </Button>
@@ -75,7 +69,6 @@ export function Topbar() {
       <UserMenu />
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
-      {comingSoon.dialog}
     </header>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   CircleDollarSign,
@@ -19,7 +20,6 @@ import { StatCard } from "@/components/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
-import { useComingSoon } from "@/components/coming-soon";
 import { AttentionSection } from "@/components/dashboard/attention-section";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { DashboardFiltersBar } from "@/components/dashboard/dashboard-filters";
@@ -28,6 +28,7 @@ import { GoalCard } from "@/components/dashboard/goal-card";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { SellersCard } from "@/components/dashboard/sellers-card";
 import { TopProductsCard } from "@/components/dashboard/top-products-card";
+import { useStore } from "@/hooks/use-store";
 import { formatBRL, formatDateLong, formatNumber } from "@/lib/format";
 import { DEMO_TODAY } from "@/lib/dates";
 import {
@@ -44,18 +45,18 @@ import {
   topProducts,
   type DashboardFilters,
 } from "@/lib/metrics";
-import { demoCompany, demoUser } from "@/lib/mock";
+import { demoUser } from "@/lib/mock";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const state = useStore();
   const [filters, setFilters] = useState<DashboardFilters>({
     period: "30d",
     channel: "todos",
     sellerId: "todos",
   });
   const [loading, setLoading] = useState(false);
-  const comingSoon = useComingSoon();
 
-  // Estado de carregamento simulado ao trocar filtros (UX de dados reais).
   const applyFilters = (next: DashboardFilters) => {
     setLoading(true);
     setFilters(next);
@@ -63,30 +64,28 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!loading) return;
-    const timer = setTimeout(() => setLoading(false), 350);
+    const timer = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(timer);
   }, [loading]);
 
   const data = useMemo(() => {
     const { current, previous, compareLabel } = resolvePeriod(filters.period);
     const scope = { channel: filters.channel, sellerId: filters.sellerId };
-    const sales = filterSales(current, scope);
-    const previousSales = filterSales(previous, scope);
-    const summary = summarize(sales);
-    const previousSummary = summarize(previousSales);
+    const sales = filterSales(state, current, scope);
+    const previousSales = filterSales(state, previous, scope);
     return {
       compareLabel,
-      summary,
-      previousSummary,
+      summary: summarize(sales),
+      previousSummary: summarize(previousSales),
       series: dailySeries(current, sales),
-      byCategory: salesByCategory(sales),
+      byCategory: salesByCategory(state, sales),
       byChannel: salesByChannel(sales),
       byPayment: salesByPayment(sales),
-      top: topProducts(sales),
-      sellers: sellerPerformance(sales),
-      executive: executiveSummary(),
+      top: topProducts(state, sales),
+      sellers: sellerPerformance(state, sales),
+      executive: executiveSummary(state),
     };
-  }, [filters]);
+  }, [filters, state]);
 
   const { summary, previousSummary, compareLabel, executive } = data;
   const delta = (current: number, previous: number) =>
@@ -99,26 +98,35 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Olá, ${demoUser.name.split(" ")[0]}`}
-        description={`${demoCompany.tradeName} · ${formatDateLong(DEMO_TODAY)} · Hoje: ${formatBRL(
+        description={`${state.company.tradeName} · ${formatDateLong(DEMO_TODAY)} · Hoje: ${formatBRL(
           executive.today.revenue
         )} em ${executive.today.salesCount} vendas`}
-        actions={
-          <DashboardFiltersBar filters={filters} onChange={applyFilters} />
-        }
+        actions={<DashboardFiltersBar filters={filters} onChange={applyFilters} />}
       />
 
-      {/* Ações rápidas */}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => comingSoon.show("Nova venda", 2)}>
+        <Button size="sm" onClick={() => router.push("/vendas/nova")}>
           <ShoppingBag /> Nova venda
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => comingSoon.show("Novo produto", 2)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => router.push("/produtos/novo")}
+        >
           <Shirt /> Novo produto
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => comingSoon.show("Nova despesa", 3)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => router.push("/financeiro?aba=despesas&nova=1")}
+        >
           <Receipt /> Nova despesa
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => comingSoon.show("Novo cliente", 2)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => router.push("/clientes/novo")}
+        >
           <Users /> Novo cliente
         </Button>
       </div>
@@ -144,8 +152,10 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* KPIs do período */}
-          <section aria-label="Indicadores do período" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <section
+            aria-label="Indicadores do período"
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+          >
             <StatCard
               label="Faturamento"
               value={formatBRL(summary.revenue)}
@@ -206,8 +216,10 @@ export default function DashboardPage() {
             />
           </section>
 
-          {/* Estoque (independente do período) */}
-          <section aria-label="Indicadores de estoque" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <section
+            aria-label="Indicadores de estoque"
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+          >
             <StatCard
               label="Peças em estoque"
               value={formatNumber(executive.stock.totalPieces)}
@@ -235,7 +247,6 @@ export default function DashboardPage() {
 
           <AttentionSection />
 
-          {/* Gráficos */}
           <section aria-label="Gráficos" className="grid gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2">
               {showDaily ? (
@@ -259,7 +270,10 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
-          <section aria-label="Composição das vendas" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <section
+            aria-label="Composição das vendas"
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
             {showDaily ? <CategoryChart data={data.byCategory} /> : null}
             <DonutCard
               title="Vendas por canal"
@@ -273,7 +287,10 @@ export default function DashboardPage() {
             />
           </section>
 
-          <section aria-label="Produtos e vendedoras" className="grid gap-4 lg:grid-cols-2">
+          <section
+            aria-label="Produtos e vendedoras"
+            className="grid gap-4 lg:grid-cols-2"
+          >
             <TopProductsCard data={data.top} />
             <SellersCard
               data={data.sellers}
@@ -289,8 +306,6 @@ export default function DashboardPage() {
           ) : null}
         </>
       )}
-
-      {comingSoon.dialog}
     </div>
   );
 }

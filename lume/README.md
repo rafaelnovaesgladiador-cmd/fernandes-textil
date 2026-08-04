@@ -1,13 +1,15 @@
 # Lume — Gestão inteligente para lojas de moda
 
-Protótipo funcional (MVP — **Etapa 1: Fundação**) de um SaaS de gestão para
-lojas de moda feminina. Em português do Brasil, mobile-first, com dados de
-demonstração realistas da loja fictícia **Bella Moda Feminina**.
+SaaS de gestão para lojas de moda feminina. Em português do Brasil,
+mobile-first, com dados de demonstração realistas da loja fictícia
+**Bella Moda Feminina**.
 
 > “Uma plataforma inteligente que mostra onde sua loja ganha dinheiro,
 > onde perde e o que fazer para vender mais.”
 
 ## Como executar
+
+Pré-requisito: Node.js 20.9 ou superior.
 
 ```bash
 cd lume
@@ -15,17 +17,37 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+No login, clique em **Entrar** (credenciais já preenchidas) ou em
+**“Explorar com dados de demonstração”**.
+
 Outros comandos:
 
 ```bash
-npm run build      # build de produção
-npm run start      # serve o build
-npx eslint src     # lint
-npx tsx scripts/sanity.ts   # confere a coerência dos dados de demonstração
+npm run build       # build de produção
+npm run start       # serve o build
+npm run build:demo  # gera a demo em arquivo único (spa/.out/)
+npx tsx scripts/sanity.ts   # confere a coerência dos números
+node scripts/e2e.mjs        # teste ponta a ponta (com o app rodando)
+npx eslint src              # lint
 ```
 
-No login, use **Entrar** (credenciais já preenchidas) ou
-**“Explorar com dados de demonstração”**.
+## O que o sistema faz
+
+| Módulo | Principais funções |
+|---|---|
+| **Visão geral** | 12 indicadores com comparação de período, gráficos, meta do mês e a seção “O que merece sua atenção” |
+| **Vendas** | Fluxo completo de venda (produto → cor/tamanho → cliente → desconto → pagamento), histórico, comprovante, cancelamento e devolução |
+| **Caixa** | Abertura, sangria, reforço e fechamento com conferência cega |
+| **Produtos** | Cadastro com variações por cor e tamanho, margem em tempo real, duplicação, etiquetas |
+| **Estoque** | Posição, movimentações auditadas, curva ABC, giro, cobertura, reposição e liquidação |
+| **Compras** | Pedidos a fornecedores, sugestão de reposição, recebimento que entra no estoque e gera as duplicatas |
+| **Clientes** | CRM com segmentos, perfil completo, histórico, interações e campanhas |
+| **Vendedores** | Desempenho multi-critério (não só faturamento), metas e comissões |
+| **Financeiro** | Contas a pagar e receber, despesas, fluxo de caixa com projeção e DRE simplificada |
+| **Catálogo** | Vitrine pública compartilhável que gera pedidos por WhatsApp |
+| **Relatórios** | 10 relatórios com comparação de períodos e exportação |
+| **Alertas** | Central de recomendações com impacto estimado e ação direta |
+| **Configurações** | Dados da loja, regras financeiras, metas, equipe, permissões, planos e auditoria |
 
 ## Stack
 
@@ -40,43 +62,52 @@ No login, use **Entrar** (credenciais já preenchidas) ou
 src/
   app/
     (auth)/          login, seleção de empresa, onboarding
-    (app)/           shell autenticado: visão geral, alertas, configurações
-                     + páginas de módulo (vendas, produtos, estoque, …)
+    (app)/           sistema: visão geral, vendas, caixa, produtos, estoque,
+                     compras, clientes, vendedores, financeiro, catálogo,
+                     relatórios, alertas, configurações
+    (public)/        vitrine pública do catálogo
   components/
     ui/              design system (button, card, dialog, select, …)
     layout/          sidebar, topbar, barra inferior mobile, notificações
-    dashboard/       cards de KPI, gráficos, seção "O que merece sua atenção"
-  hooks/             useSession (autenticação simulada)
+    dashboard/       cards de KPI, gráficos, seção de atenção
+    <módulo>/        componentes de cada módulo
+  hooks/             useStore, useSession, useAlerts
   lib/
-    types.ts         modelo de domínio multiempresa (companyId em tudo)
-    mock/            massa de dados determinística da Bella Moda Feminina
-    metrics.ts       KPIs calculados a partir das vendas/despesas mockadas
-    alerts.ts        alertas DERIVADOS dos dados (nunca escritos à mão)
+    types.ts         modelo de domínio multiempresa
+    store/           estado da aplicação e ações de negócio
+    metrics.ts       indicadores derivados do estado
+    alerts.ts        alertas calculados da mesma base
+    permissions.ts   matriz de permissões por perfil
+    mock/            massa de dados de demonstração
+supabase/migrations/ esquema SQL e políticas de segurança
+spa/                 empacotador da demo em arquivo único
+docs/PRODUCAO.md     passo a passo para produção
 ```
 
 ## Decisões de arquitetura
 
-- **Coerência por construção** — o gerador cria as vendas primeiro; impostos,
-  taxas de cartão e contas a receber (crediário) são calculados a partir
-  delas, e todos os números do Dashboard e dos alertas saem da mesma base.
-- **Determinismo** — PRNG com semente fixa + “hoje” ancorado em 01/08/2026
-  (America/Sao_Paulo): servidor e cliente renderizam exatamente o mesmo HTML.
-- **Multiempresa desde o dia 1** — toda entidade carrega `companyId`; a troca
-  dos mocks pelo Supabase (RLS por empresa) está prevista para a Etapa 5 sem
-  mudança de interface (`src/lib/mock` é a única camada a substituir).
-- **Sessão simulada** — `useSession` persiste login/loja no `localStorage` via
-  `useSyncExternalStore`; será trocado pelo Supabase Auth mantendo a API.
+- **Um único estado, muitas leituras** — as telas nunca guardam números
+  próprios: tudo é derivado de `src/lib/store` por `src/lib/metrics.ts`. Uma
+  venda registrada muda estoque, financeiro, comissões, alertas e dashboard na
+  mesma hora, porque todos leem a mesma fonte.
+- **Ações de negócio, não CRUD** — `createSale` não apenas grava a venda: baixa
+  o estoque, registra a movimentação, gera as parcelas do crediário e grava a
+  auditoria. É a mesma transação que vira função no banco em produção.
+- **Coerência por construção** — a base de demonstração é gerada a partir das
+  vendas; impostos, taxas de cartão e contas a receber são calculados delas.
+- **Determinismo** — PRNG com semente fixa e “hoje” ancorado em 01/08/2026
+  (America/Sao_Paulo): servidor e cliente renderizam o mesmo HTML.
+- **Multiempresa desde o dia 1** — toda entidade carrega `companyId`, e o
+  esquema em `supabase/migrations` aplica isolamento por RLS.
+- **Segurança em duas camadas** — a interface esconde o que o perfil não pode
+  usar; o banco recusa a operação mesmo se a tela for burlada.
 
-## Roadmap
+## Estado atual
 
-| Etapa | Escopo | Status |
-|---|---|---|
-| 1 — Fundação | design system, navegação, auth simulada, onboarding, Dashboard, alertas, configurações, dados demo | ✅ concluída |
-| 2 — Operação comercial | produtos, variações, estoque, nova venda, clientes, vendedores | ◻️ |
-| 3 — Gestão | financeiro, contas, fluxo de caixa, metas, comissões, relatórios | ◻️ |
-| 4 — Crescimento | catálogo virtual, CRM, campanhas, análises de estoque | ◻️ |
-| 5 — Produção | Supabase (banco/auth/RLS), permissões, auditoria, planos | ◻️ |
+Etapas 1 a 4 implementadas e funcionais com dados locais. A Etapa 5
+(banco real, autenticação e cobrança) está preparada: esquema, políticas de
+segurança, permissões e o passo a passo em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).
 
-As páginas dos módulos futuros já existem, navegáveis, com números reais da
-base de demonstração e o escopo planejado — nenhum item do menu leva a uma
-página vazia.
+O que ainda é simulado: envio de mensagens (WhatsApp/e-mail abre o texto
+pronto para copiar), exportação de PDF/Excel, emissão fiscal e meios de
+pagamento.

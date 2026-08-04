@@ -1,23 +1,122 @@
-import { executiveSummary, resolvePeriod, filterSales, summarize, sellerPerformance, inactiveCustomers, salesByChannel, topProducts, deltaPercent } from "../src/lib/metrics";
-import { demoSales, demoProducts, demoVariants, demoCustomers, demoExpenses, demoReceivables } from "../src/lib/mock";
-import { demoAlerts } from "../src/lib/alerts";
+/**
+ * Confere a coerência da base de demonstração e dos indicadores derivados.
+ * Uso: npx tsx scripts/sanity.ts
+ */
+import { createSeedState } from "../src/lib/store/state";
+import {
+  cashFlow,
+  customerStats,
+  deltaPercent,
+  executiveSummary,
+  filterSales,
+  incomeStatement,
+  inactiveCustomers,
+  resolvePeriod,
+  salesByChannel,
+  sellerPerformance,
+  stockAnalysis,
+  stockSummary,
+  summarize,
+  topProducts,
+} from "../src/lib/metrics";
+import { buildAlerts } from "../src/lib/alerts";
 
-const s = executiveSummary();
-console.log("produtos:", demoProducts.length, "variações:", demoVariants.length, "clientes:", demoCustomers.length, "vendas:", demoSales.length, "despesas:", demoExpenses.length, "receber:", demoReceivables.length);
-console.log("hoje: fat", s.today.revenue.toFixed(2), "vendas", s.today.salesCount);
-console.log("mês: fat", s.month.revenue.toFixed(2), "lucroBruto", s.month.grossProfit.toFixed(2), "despesasMês", s.monthExpenses.toFixed(2), "líquido", s.netProfit.toFixed(2));
-console.log("meta:", s.goal);
-console.log("estoque:", JSON.stringify(s.stock));
-console.log("receber:", s.receivables.toFixed(2), "pagar:", s.payables.toFixed(2));
+const state = createSeedState();
+const brl = (v: number) => `R$ ${v.toFixed(2)}`;
+
+console.log("=== BASE ===");
+console.log(
+  `produtos ${state.products.length} · variações ${state.variants.length} · clientes ${state.customers.length} · vendas ${state.sales.length} · despesas ${state.expenses.length}`
+);
+
+const exec = executiveSummary(state);
+console.log("\n=== VISÃO EXECUTIVA ===");
+console.log(`hoje: ${brl(exec.today.revenue)} em ${exec.today.salesCount} vendas`);
+console.log(
+  `mês: fat ${brl(exec.month.revenue)} · lucro bruto ${brl(exec.month.grossProfit)} · despesas ${brl(exec.monthExpenses)} · líquido ${brl(exec.netProfit)}`
+);
+console.log(
+  `meta: ${exec.goal ? `${brl(exec.goal.target)} (${exec.goal.percent.toFixed(1)}%)` : "—"}`
+);
+console.log(`a receber ${brl(exec.receivables)} · a pagar ${brl(exec.payables)}`);
+
+console.log("\n=== ESTOQUE ===");
+const stock = stockSummary(state);
+console.log(
+  `peças ${stock.totalPieces} · custo ${brl(stock.stockCost)} · potencial ${brl(stock.stockPotential)} · margem ${stock.potentialMargin.toFixed(1)}%`
+);
+console.log(
+  `repor ${stock.lowStockProducts} · sem estoque ${stock.outOfStockProducts} · parados ${stock.stalled.count} (${brl(stock.stalled.value)})`
+);
+const abc = stockAnalysis(state);
+for (const cls of ["A", "B", "C"] as const) {
+  const rows = abc.filter((r) => r.abcClass === cls);
+  const revenue = rows.reduce((sum, r) => sum + r.revenue90, 0);
+  console.log(`  curva ${cls}: ${rows.length} produtos · ${brl(revenue)} em 90 dias`);
+}
+
+console.log("\n=== COMPARAÇÃO 30 DIAS ===");
 const p30 = resolvePeriod("30d");
-const c = summarize(filterSales(p30.current)); const p = summarize(filterSales(p30.previous));
-console.log("30d fat:", c.revenue.toFixed(0), "vs", p.revenue.toFixed(0), "delta%", deltaPercent(c.revenue, p.revenue)?.toFixed(1));
-console.log("30d lucro:", c.grossProfit.toFixed(0), "vs", p.grossProfit.toFixed(0), "delta%", deltaPercent(c.grossProfit, p.grossProfit)?.toFixed(1), "margem", c.margin.toFixed(1), "antes", p.margin.toFixed(1));
-console.log("canais 30d:", salesByChannel(filterSales(p30.current)).map(x=>`${x.name}: ${x.value.toFixed(0)}`).join(" | "));
-console.log("top produtos:", topProducts(filterSales(p30.current), 3).map(t=>t.name).join(" | "));
-const julSales = summarize(filterSales(resolvePeriod("mes_anterior").current));
-console.log("julho fat:", julSales.revenue.toFixed(0), "ticket", julSales.ticket.toFixed(2), "peças", julSales.pieces);
-console.log("vendedoras julho:", sellerPerformance(filterSales(resolvePeriod("mes_anterior").current)).map(x=>`${x.seller.name}: ${x.revenue.toFixed(0)} (${x.goalPercent.toFixed(0)}% meta)`).join(" | "));
-console.log("clientes inativos 120d:", inactiveCustomers(120).length);
-console.log("alertas:", demoAlerts.length);
-for (const a of demoAlerts) console.log(" -", `[${a.priority}]`, a.title);
+const cur = summarize(filterSales(state, p30.current));
+const prev = summarize(filterSales(state, p30.previous));
+console.log(
+  `fat ${brl(cur.revenue)} vs ${brl(prev.revenue)} → ${deltaPercent(cur.revenue, prev.revenue)?.toFixed(1)}%`
+);
+console.log(
+  `lucro ${brl(cur.grossProfit)} vs ${brl(prev.grossProfit)} → ${deltaPercent(cur.grossProfit, prev.grossProfit)?.toFixed(1)}%`
+);
+console.log(`margem ${cur.margin.toFixed(1)}% (antes ${prev.margin.toFixed(1)}%)`);
+console.log(
+  "canais: " +
+    salesByChannel(filterSales(state, p30.current))
+      .map((c) => `${c.name} ${brl(c.value)}`)
+      .join(" | ")
+);
+console.log(
+  "top produtos: " +
+    topProducts(state, filterSales(state, p30.current), 3)
+      .map((p) => p.name)
+      .join(" | ")
+);
+
+console.log("\n=== DRE (julho) ===");
+const dre = incomeStatement(state, resolvePeriod("mes_anterior").current);
+console.log(`faturamento bruto ${brl(dre.grossRevenue)}`);
+console.log(`(-) descontos ${brl(dre.discounts)}`);
+console.log(`(=) receita líquida ${brl(dre.netRevenue)}`);
+console.log(`(-) CMV ${brl(dre.cogs)}`);
+console.log(`(=) lucro bruto ${brl(dre.grossProfit)}`);
+console.log(
+  `(-) despesas ${brl(dre.operatingExpenses)} · taxas ${brl(dre.cardFees)} · comissões ${brl(dre.commissions)} · impostos ${brl(dre.taxes)}`
+);
+console.log(
+  `(=) lucro líquido ${brl(dre.netProfit)} (margem ${dre.netMargin.toFixed(1)}%)`
+);
+
+console.log("\n=== FLUXO DE CAIXA ===");
+const flow = cashFlow(state, 30, 30);
+console.log(
+  `saldo atual ${brl(flow.currentBalance)} · mínimo projetado ${brl(flow.minProjected)}`
+);
+
+console.log("\n=== EQUIPE (julho) ===");
+for (const s of sellerPerformance(
+  state,
+  filterSales(state, resolvePeriod("mes_anterior").current)
+)) {
+  console.log(
+    `  ${s.seller.name}: ${brl(s.revenue)} · ${s.goalPercent.toFixed(0)}% da meta · margem ${s.margin.toFixed(1)}% · comissão ${brl(s.commission)}`
+  );
+}
+
+console.log("\n=== CLIENTES ===");
+const stats = customerStats(state);
+const bySegment = new Map<string, number>();
+for (const s of stats) bySegment.set(s.segment, (bySegment.get(s.segment) ?? 0) + 1);
+console.log([...bySegment].map(([k, v]) => `${k}: ${v}`).join(" | "));
+console.log(`inativos +120d: ${inactiveCustomers(state, 120).length}`);
+
+console.log("\n=== ALERTAS ===");
+for (const alert of buildAlerts(state)) {
+  console.log(`  [${alert.priority}] ${alert.title}`);
+}

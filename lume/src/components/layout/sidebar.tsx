@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { NAV_GROUPS } from "@/lib/nav";
-import { demoCompany } from "@/lib/mock";
+import { useStore } from "@/hooks/use-store";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({
@@ -21,6 +21,7 @@ export function Sidebar({
   onToggle: () => void;
 }) {
   const pathname = usePathname();
+  const state = useStore();
 
   return (
     <aside
@@ -112,19 +113,20 @@ export function Sidebar({
       >
         {collapsed ? (
           <span className="flex size-8 items-center justify-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-active-foreground">
-            {demoCompany.logoInitials}
+            {state.company.logoInitials}
           </span>
         ) : (
           <div className="flex items-center gap-2.5">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-active-foreground">
-              {demoCompany.logoInitials}
+              {state.company.logoInitials}
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-sidebar-active-foreground">
-                {demoCompany.tradeName}
+                {state.company.tradeName}
               </p>
               <p className="truncate text-xs text-sidebar-muted-foreground">
-                {demoCompany.city}/{demoCompany.state} · Plano Gestão
+                {state.company.city}/{state.company.state} · Plano{" "}
+                <span className="capitalize">{state.company.plan}</span>
               </p>
             </div>
           </div>

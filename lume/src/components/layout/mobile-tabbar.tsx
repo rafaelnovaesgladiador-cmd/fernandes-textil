@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, Plus } from "lucide-react";
 import {
   Sheet,
@@ -12,8 +12,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { ALL_NAV_ITEMS, MOBILE_TABS, NAV_GROUPS } from "@/lib/nav";
-import { useComingSoon } from "@/components/coming-soon";
-import { demoCompany } from "@/lib/mock";
+import { useStore } from "@/hooks/use-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,8 +21,9 @@ import { cn } from "@/lib/utils";
  */
 export function MobileTabbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const state = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
-  const comingSoon = useComingSoon();
 
   const tabs = MOBILE_TABS.map(
     (href) => ALL_NAV_ITEMS.find((item) => item.href === href)!
@@ -64,13 +64,7 @@ export function MobileTabbar() {
           <div className="flex flex-1 items-center justify-center">
             <button
               aria-label="Nova venda"
-              onClick={() =>
-                comingSoon.show(
-                  "Nova venda",
-                  2,
-                  "O fluxo completo de venda — pensado para o balcão e para o WhatsApp — é o coração da Etapa 2."
-                )
-              }
+              onClick={() => router.push("/vendas/nova")}
               className="flex size-12 -translate-y-3 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer"
             >
               <Plus className="size-6" />
@@ -88,7 +82,7 @@ export function MobileTabbar() {
             </SheetTrigger>
             <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto pb-[max(env(safe-area-inset-bottom),1rem)]">
               <SheetHeader className="pb-0">
-                <SheetTitle>{demoCompany.tradeName}</SheetTitle>
+                <SheetTitle>{state.company.tradeName}</SheetTitle>
               </SheetHeader>
               <div className="grid grid-cols-3 gap-2 px-4 pb-2">
                 {NAV_GROUPS.flatMap((g) => g.items).map((item) => {
@@ -115,7 +109,6 @@ export function MobileTabbar() {
           </Sheet>
         </div>
       </nav>
-      {comingSoon.dialog}
     </>
   );
 }

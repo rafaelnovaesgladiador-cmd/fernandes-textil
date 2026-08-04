@@ -12,12 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { demoCompany, demoUser } from "@/lib/mock";
+import { demoUser } from "@/lib/mock";
+import { useStore } from "@/hooks/use-store";
 import { useSession } from "@/hooks/use-session";
 import { initials } from "@/lib/format";
 
 export function UserMenu() {
   const router = useRouter();
+  const state = useStore();
   const { logout } = useSession();
 
   return (
@@ -50,7 +52,7 @@ export function UserMenu() {
           <Link href="/selecionar-empresa">
             <Building2 /> Trocar de loja
             <span className="ml-auto text-xs text-muted-foreground">
-              {demoCompany.tradeName}
+              {state.company.tradeName}
             </span>
           </Link>
         </DropdownMenuItem>

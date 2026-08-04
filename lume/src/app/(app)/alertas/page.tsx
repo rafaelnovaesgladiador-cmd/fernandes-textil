@@ -16,7 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { demoAlerts } from "@/lib/alerts";
+import {
+  ALERT_PRIORITY_ORDER,
+  ALERT_PRIORITY_VARIANT,
+  useAlerts,
+} from "@/hooks/use-alerts";
+import { setAlertStatus } from "@/lib/store";
 import { formatBRL, formatDate } from "@/lib/format";
 import {
   ALERT_CATEGORY_LABELS,
@@ -27,63 +32,43 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const PRIORITY_VARIANT = {
-  baixa: "secondary",
-  media: "warning",
-  alta: "serious",
-  critica: "critical",
-} as const;
-
-const PRIORITY_ORDER: Record<AlertPriority, number> = {
-  critica: 0,
-  alta: 1,
-  media: 2,
-  baixa: 3,
-};
-
-type StatusOverride = Record<string, Alert["status"]>;
-
 export default function AlertsPage() {
+  const allAlerts = useAlerts();
   const [category, setCategory] = useState<AlertCategory | "todas">("todas");
   const [priority, setPriority] = useState<AlertPriority | "todas">("todas");
-  const [overrides, setOverrides] = useState<StatusOverride>({});
 
-  const alerts = useMemo(() => {
-    return demoAlerts
-      .map((alert) => ({
-        ...alert,
-        status: overrides[alert.id] ?? alert.status,
-      }))
-      .filter((alert) => category === "todas" || alert.category === category)
-      .filter((alert) => priority === "todas" || alert.priority === priority)
-      .sort((a, b) => {
-        if (a.status !== b.status) return a.status === "aberto" ? -1 : 1;
-        return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-      });
-  }, [category, priority, overrides]);
+  const alerts = useMemo(
+    () =>
+      allAlerts
+        .filter((alert) => category === "todas" || alert.category === category)
+        .filter((alert) => priority === "todas" || alert.priority === priority)
+        .sort((a, b) => {
+          if (a.status !== b.status) return a.status === "aberto" ? -1 : 1;
+          return ALERT_PRIORITY_ORDER[a.priority] - ALERT_PRIORITY_ORDER[b.priority];
+        }),
+    [allAlerts, category, priority]
+  );
 
   const openCount = alerts.filter((a) => a.status === "aberto").length;
 
   const resolve = (alert: Alert) => {
-    setOverrides((current) => ({ ...current, [alert.id]: "resolvido" }));
+    setAlertStatus(alert.id, "resolvido");
     toast.success("Alerta marcado como resolvido", {
       description: alert.title,
       action: {
         label: "Desfazer",
-        onClick: () =>
-          setOverrides((current) => ({ ...current, [alert.id]: "aberto" })),
+        onClick: () => setAlertStatus(alert.id, "aberto"),
       },
     });
   };
 
   const ignore = (alert: Alert) => {
-    setOverrides((current) => ({ ...current, [alert.id]: "ignorado" }));
+    setAlertStatus(alert.id, "ignorado");
     toast("Alerta ignorado", {
       description: "Ele não aparecerá mais como pendente.",
       action: {
         label: "Desfazer",
-        onClick: () =>
-          setOverrides((current) => ({ ...current, [alert.id]: "aberto" })),
+        onClick: () => setAlertStatus(alert.id, "aberto"),
       },
     });
   };
@@ -92,7 +77,7 @@ export default function AlertsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Alertas e recomendações"
-        description={`${openCount} alertas abertos — cada um com impacto estimado e ação sugerida.`}
+        description={`${openCount} ${openCount === 1 ? "alerta aberto" : "alertas abertos"} — cada um com impacto estimado e ação sugerida.`}
         actions={
           <div className="flex items-center gap-2">
             <Filter className="hidden size-4 text-muted-foreground sm:block" />
@@ -105,13 +90,13 @@ export default function AlertsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as categorias</SelectItem>
-                {(
-                  Object.keys(ALERT_CATEGORY_LABELS) as AlertCategory[]
-                ).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {ALERT_CATEGORY_LABELS[key]}
-                  </SelectItem>
-                ))}
+                {(Object.keys(ALERT_CATEGORY_LABELS) as AlertCategory[]).map(
+                  (key) => (
+                    <SelectItem key={key} value={key}>
+                      {ALERT_CATEGORY_LABELS[key]}
+                    </SelectItem>
+                  )
+                )}
               </SelectContent>
             </Select>
             <Select
@@ -123,13 +108,13 @@ export default function AlertsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as prioridades</SelectItem>
-                {(
-                  Object.keys(ALERT_PRIORITY_LABELS) as AlertPriority[]
-                ).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {ALERT_PRIORITY_LABELS[key]}
-                  </SelectItem>
-                ))}
+                {(Object.keys(ALERT_PRIORITY_LABELS) as AlertPriority[]).map(
+                  (key) => (
+                    <SelectItem key={key} value={key}>
+                      {ALERT_PRIORITY_LABELS[key]}
+                    </SelectItem>
+                  )
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -159,16 +144,15 @@ export default function AlertsPage() {
           {alerts.map((alert) => (
             <Card
               key={alert.id}
-              className={cn(
-                "p-4 sm:p-5",
-                alert.status !== "aberto" && "opacity-60"
-              )}
+              className={cn("p-4 sm:p-5", alert.status !== "aberto" && "opacity-60")}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={PRIORITY_VARIANT[alert.priority]}>
+                <Badge variant={ALERT_PRIORITY_VARIANT[alert.priority]}>
                   {ALERT_PRIORITY_LABELS[alert.priority]}
                 </Badge>
-                <Badge variant="outline">{ALERT_CATEGORY_LABELS[alert.category]}</Badge>
+                <Badge variant="outline">
+                  {ALERT_CATEGORY_LABELS[alert.category]}
+                </Badge>
                 <span className="text-xs text-muted-foreground">
                   {formatDate(alert.date)} · Responsável: Proprietário
                 </span>
@@ -182,7 +166,9 @@ export default function AlertsPage() {
               <h2 className="mt-2.5 text-base font-semibold leading-snug">
                 {alert.title}
               </h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">{alert.explanation}</p>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {alert.explanation}
+              </p>
 
               <div className="mt-3 rounded-lg bg-secondary/60 p-3 text-sm">
                 <p>
@@ -199,7 +185,7 @@ export default function AlertsPage() {
                 ) : null}
               </div>
 
-              {alert.status === "aberto" && (
+              {alert.status === "aberto" ? (
                 <div className="mt-3.5 flex flex-wrap items-center gap-2">
                   <Button asChild size="sm">
                     <Link href={alert.actionHref}>
@@ -211,6 +197,16 @@ export default function AlertsPage() {
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => ignore(alert)}>
                     Ignorar
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-3.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAlertStatus(alert.id, "aberto")}
+                  >
+                    Reabrir alerta
                   </Button>
                 </div>
               )}
