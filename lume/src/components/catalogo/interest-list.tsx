@@ -4,10 +4,11 @@ import * as React from "react";
 import { Copy, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/hooks/use-store";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CatalogSheet } from "./catalog-sheet";
-import { ColorSwatch, ProductMedia } from "./product-media";
+import { ColorSwatch, ProductMedia, productImage } from "./product-media";
 import {
   buildOrderMessage,
   copyToClipboard,
@@ -36,6 +37,18 @@ export function InterestList({
   const { embedded } = useStorefrontFrame();
   const wishlist = useWishlist();
   const [open, setOpen] = React.useState(false);
+
+  // A lista vive no navegador da cliente e guarda só o essencial da peça; a
+  // imagem vem do produto na hora de desenhar, sempre atualizada.
+  const state = useStore();
+  const imageByProduct = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of state.products) {
+      const image = productImage(product);
+      if (image) map.set(product.id, image);
+    }
+    return map;
+  }, [state.products]);
 
   const hasItems = wishlist.items.length > 0;
   const hasWhatsapp = whatsapp.trim() !== "";
@@ -145,6 +158,7 @@ export function InterestList({
               <ProductMedia
                 name={item.name}
                 color={item.color}
+                image={imageByProduct.get(item.productId)}
                 className="size-16 shrink-0 rounded-lg"
                 compact
               />

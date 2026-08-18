@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CatalogItem } from "./catalog-data";
-import { ColorSwatch, ProductMedia } from "./product-media";
+import { ColorSwatch, ProductMedia, productImage } from "./product-media";
 
 /** Bloco de preço, respeitando a opção "mostrar preços" da loja. */
 export function PriceTag({
@@ -86,6 +86,7 @@ export function ProductCard({
         <ProductMedia
           name={item.product.name}
           color={cover}
+          image={productImage(item.product)}
           className="aspect-[3/4] w-full rounded-none"
         />
         <div className="absolute inset-x-2 top-2 flex flex-wrap gap-1">

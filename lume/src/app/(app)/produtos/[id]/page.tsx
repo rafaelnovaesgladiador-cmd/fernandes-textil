@@ -9,6 +9,7 @@ import {
   EllipsisVertical,
   Package,
   Pencil,
+  Image as ImageIcon,
   Percent,
   Power,
   PowerOff,
@@ -35,9 +36,10 @@ import { useStore } from "@/hooks/use-store";
 import { addDays, DEMO_TODAY_START } from "@/lib/dates";
 import { formatBRL, formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { filterSales, productPerformance, stockAnalysis } from "@/lib/metrics";
-import { createProduct, updateProduct } from "@/lib/store";
+import { createProduct, remainingCredits, updateProduct } from "@/lib/store";
 import type { AppState } from "@/lib/store";
 import type { Product } from "@/lib/types";
+import { ProductPhotoTab } from "@/components/estudio/product-photo-tab";
 import { LabelPrintDialog } from "@/components/produtos/label-print-dialog";
 import { ProductEditSheet } from "@/components/produtos/product-edit-sheet";
 import { ProductHistoryTab } from "@/components/produtos/product-history-tab";
@@ -291,6 +293,10 @@ function ProductDetail({
       <Tabs defaultValue="variacoes" className="space-y-4">
         <TabsList>
           <TabsTrigger value="variacoes">Variações</TabsTrigger>
+          <TabsTrigger value="foto">
+            <ImageIcon />
+            Foto
+          </TabsTrigger>
           <TabsTrigger value="desempenho">Desempenho</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
@@ -301,6 +307,13 @@ function ProductDetail({
             onAdjust={(variantId) =>
               setAdjustTarget({ product, variants, variantId })
             }
+          />
+        </TabsContent>
+
+        <TabsContent value="foto">
+          <ProductPhotoTab
+            product={product}
+            remaining={remainingCredits(state)}
           />
         </TabsContent>
 

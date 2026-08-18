@@ -1,14 +1,27 @@
 "use client";
 
+import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
  * Bloco visual da peça.
  *
- * O catálogo ainda não tem fotos reais: no lugar da imagem entra um gradiente
- * derivado da cor da variação, o que mantém a vitrine elegante e faz cada peça
- * ficar visualmente distinta. Quando as fotos existirem, só este componente muda.
+ * Quando o produto tem imagem do estúdio, ela é a foto do card; sem imagem,
+ * entra um gradiente derivado da cor da variação, o que mantém a vitrine
+ * elegante e faz cada peça ficar visualmente distinta mesmo antes das fotos.
  */
+
+/**
+ * Imagem do produto para a vitrine.
+ *
+ * A prova no provador vem antes da foto de capa: peça vestida dá noção de
+ * caimento e vende mais do que a peça isolada.
+ */
+export function productImage(
+  product: Pick<Product, "tryOnImage" | "coverImage">
+): string | undefined {
+  return product.tryOnImage ?? product.coverImage;
+}
 
 interface ColorTone {
   /** Tom principal, usado também na bolinha de cor. */
@@ -105,33 +118,51 @@ export function ColorSwatch({
 }
 
 /**
- * Bloco que substitui a foto do produto.
- * É decorativo: o nome também aparece como texto no card, então fica oculto
- * para leitores de tela.
+ * Bloco de mídia do produto: a imagem do estúdio quando existe, o gradiente da
+ * cor quando não. Sem imagem o bloco é decorativo (o nome já aparece como texto
+ * no card) e fica oculto para leitores de tela.
  */
 export function ProductMedia({
   name,
   color,
+  image,
   className,
   compact = false,
 }: {
   name: string;
   color?: string;
+  /** Imagem do produto (data URI). Sem ela, o gradiente entra no lugar. */
+  image?: string;
   className?: string;
   compact?: boolean;
 }) {
   return (
     <div
-      aria-hidden
+      // Com imagem o bloco deixa de ser decorativo: a foto descreve a peça.
+      aria-hidden={image ? undefined : true}
       className={cn(
         "relative isolate overflow-hidden rounded-lg",
         !className && "aspect-[3/4] w-full",
         className
       )}
+      // O gradiente continua atrás da imagem: se ela não carregar, o card não
+      // fica com um buraco branco.
       style={{ background: toneBackground(color) }}
     >
-      <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_20%_8%,rgba(255,255,255,0.42),transparent_62%)]" />
-      <span className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(0,0,0,0.18)_100%)]" />
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element -- data URI gerado pelo estúdio, sem arquivo para o otimizador
+        <img
+          src={image}
+          alt={`Foto de ${name}`}
+          loading="lazy"
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : (
+        <>
+          <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_20%_8%,rgba(255,255,255,0.42),transparent_62%)]" />
+          <span className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(0,0,0,0.18)_100%)]" />
+        </>
+      )}
       {compact ? null : (
         <span className="absolute inset-x-2 bottom-2">
           <span className="line-clamp-2 rounded-md bg-white/88 px-2 py-1 text-[11px] font-medium leading-snug text-[#1b1613] shadow-xs">

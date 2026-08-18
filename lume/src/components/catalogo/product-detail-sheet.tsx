@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { CatalogSheet } from "./catalog-sheet";
 import { sizesForColor, type CatalogItem } from "./catalog-data";
 import { PriceTag } from "./product-card";
-import { ColorSwatch, ProductMedia } from "./product-media";
+import { ColorSwatch, ProductMedia, productImage } from "./product-media";
 import { buildSingleItemMessage, openWhatsapp } from "./share";
 import { useWishlist, wishlistItemId } from "./wishlist";
 
@@ -122,6 +122,7 @@ export function ProductDetailSheet({
           <ProductMedia
             name={item.product.name}
             color={color || item.colors[0]?.name}
+            image={productImage(item.product)}
             className="aspect-[4/3] w-full rounded-xl"
             compact
           />

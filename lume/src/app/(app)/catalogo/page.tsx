@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
   Copy,
@@ -51,25 +52,60 @@ import {
   catalogValue,
   type CatalogItem,
 } from "@/components/catalogo/catalog-data";
-import { ProductMedia } from "@/components/catalogo/product-media";
+import { ProductMedia, productImage } from "@/components/catalogo/product-media";
 import { copyToClipboard, formatPhone } from "@/components/catalogo/share";
 import { Storefront } from "@/components/catalogo/storefront";
 import { PhoneFrame } from "@/components/catalogo/storefront-frame";
+import { StudioTab } from "@/components/estudio/studio-tab";
 import { useStore } from "@/hooks/use-store";
 import { useMounted } from "@/lib/client-store";
 import { formatBRL, formatNumber } from "@/lib/format";
 import { updateSettings } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
+type TabKey = "configuracao" | "produtos" | "previa" | "estudio";
+
+const TAB_KEYS: TabKey[] = ["configuracao", "produtos", "previa", "estudio"];
+
 /**
  * Administração do catálogo virtual.
  *
- * Três frentes: como a vitrine se apresenta, o que entra nela e como ela fica
+ * Quatro frentes: como a vitrine se apresenta, o que entra nela, como ela fica
  * de verdade no celular da cliente — a prévia usa o mesmo componente da página
- * pública, sem maquete paralela para desatualizar.
+ * pública, sem maquete paralela para desatualizar — e o estúdio, que produz as
+ * imagens das peças.
+ *
+ * A aba vive na URL para que o produto consiga abrir o provador já apontando
+ * para a peça certa.
  */
 export default function CatalogoPage() {
+  return (
+    <React.Suspense fallback={<CatalogoSkeleton />}>
+      <CatalogoContent />
+    </React.Suspense>
+  );
+}
+
+function CatalogoSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Carregando catálogo">
+      <Skeleton className="h-14 w-72" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+      </div>
+      <Skeleton className="h-9 w-96" />
+      <Skeleton className="h-124" />
+    </div>
+  );
+}
+
+function CatalogoContent() {
   const state = useStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const mounted = useMounted();
   const catalog = state.settings.catalog;
 
@@ -81,6 +117,20 @@ export default function CatalogoPage() {
 
   const catalogHref = "/vitrine";
   const catalogUrl = mounted ? `${window.location.origin}${catalogHref}` : catalogHref;
+
+  const abaParam = searchParams.get("aba");
+  const produtoParam = searchParams.get("produto");
+  const tab: TabKey = TAB_KEYS.includes(abaParam as TabKey)
+    ? (abaParam as TabKey)
+    : "configuracao";
+
+  // A aba escolhida à mão reescreve a URL: o botão "voltar" do celular
+  // continua desfazendo a navegação, e o link do produto sai do endereço.
+  const changeTab = (value: string) => {
+    router.replace(
+      value === "configuracao" ? "/catalogo" : `/catalogo?aba=${value}`
+    );
+  };
 
   const copyLink = async () => {
     const ok = await copyToClipboard(catalogUrl);
@@ -137,11 +187,15 @@ export default function CatalogoPage() {
         />
       </section>
 
-      <Tabs defaultValue="configuracao" className="space-y-4">
+      <Tabs value={tab} onValueChange={changeTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="configuracao">Configuração</TabsTrigger>
           <TabsTrigger value="produtos">Produtos no catálogo</TabsTrigger>
           <TabsTrigger value="previa">Prévia</TabsTrigger>
+          <TabsTrigger value="estudio">
+            <Sparkles />
+            Estúdio
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="configuracao">
@@ -167,6 +221,19 @@ export default function CatalogoPage() {
             published={items.length}
             featured={featuredCount}
           />
+        </TabsContent>
+
+        <TabsContent value="estudio">
+          {/* O estúdio lê créditos, modelo e histórico do estado salvo no
+              navegador: só monta depois da hidratação. */}
+          {mounted ? (
+            <StudioTab initialProductId={produtoParam ?? undefined} />
+          ) : (
+            <div className="space-y-4">
+              <Skeleton className="h-64" />
+              <Skeleton className="h-80" />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -520,6 +587,7 @@ function ProductsTab({
                 <ProductMedia
                   name={item.product.name}
                   color={item.colors[0]?.name}
+                  image={productImage(item.product)}
                   className="size-12 shrink-0 rounded-md"
                   compact
                 />
