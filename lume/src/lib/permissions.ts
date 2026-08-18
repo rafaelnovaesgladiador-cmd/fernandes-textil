@@ -28,6 +28,7 @@ export type Permission =
   | "financeiro.gerenciar"
   | "relatorios.ver"
   | "catalogo.gerenciar"
+  | "estudio.gerar"
   | "alertas.ver"
   | "configuracoes.ver"
   | "configuracoes.editar"
@@ -53,6 +54,7 @@ const ALL: Permission[] = [
   "financeiro.gerenciar",
   "relatorios.ver",
   "catalogo.gerenciar",
+  "estudio.gerar",
   "alertas.ver",
   "configuracoes.ver",
   "configuracoes.editar",

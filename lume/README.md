@@ -44,7 +44,7 @@ npx eslint src              # lint
 | **Clientes** | CRM com segmentos, perfil completo, histórico, interações e campanhas |
 | **Vendedores** | Desempenho multi-critério (não só faturamento), metas e comissões |
 | **Financeiro** | Contas a pagar e receber, despesas, fluxo de caixa com projeção e DRE simplificada |
-| **Catálogo** | Vitrine pública compartilhável que gera pedidos por WhatsApp |
+| **Catálogo** | Vitrine pública compartilhável que gera pedidos por WhatsApp, com estúdio de imagens por IA |
 | **Relatórios** | 10 relatórios com comparação de períodos e exportação |
 | **Alertas** | Central de recomendações com impacto estimado e ação direta |
 | **Configurações** | Dados da loja, regras financeiras, metas, equipe, permissões, planos e auditoria |
@@ -75,6 +75,7 @@ src/
   lib/
     types.ts         modelo de domínio multiempresa
     store/           estado da aplicação e ações de negócio
+    ai/images.ts     camada única de imagens por IA (hoje simulada)
     metrics.ts       indicadores derivados do estado
     alerts.ts        alertas calculados da mesma base
     permissions.ts   matriz de permissões por perfil
@@ -82,6 +83,7 @@ src/
 supabase/migrations/ esquema SQL e políticas de segurança
 spa/                 empacotador da demo em arquivo único
 docs/PRODUCAO.md     passo a passo para produção
+docs/ESTUDIO-IA.md   estúdio de imagens e troca do provedor
 ```
 
 ## Decisões de arquitetura
@@ -99,6 +101,10 @@ docs/PRODUCAO.md     passo a passo para produção
   (America/Sao_Paulo): servidor e cliente renderizam o mesmo HTML.
 - **Multiempresa desde o dia 1** — toda entidade carrega `companyId`, e o
   esquema em `supabase/migrations` aplica isolamento por RLS.
+- **Provedor atrás de uma porta só** — as três operações de imagem por IA
+  vivem em `src/lib/ai/images.ts`. As telas chamam ações de negócio, nunca o
+  provedor; trocar a simulação pela FASHN mexe apenas nesse arquivo.
+
 - **Segurança em duas camadas** — a interface esconde o que o perfil não pode
   usar; o banco recusa a operação mesmo se a tela for burlada.
 
@@ -108,6 +114,7 @@ Etapas 1 a 4 implementadas e funcionais com dados locais. A Etapa 5
 (banco real, autenticação e cobrança) está preparada: esquema, políticas de
 segurança, permissões e o passo a passo em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).
 
-O que ainda é simulado: envio de mensagens (WhatsApp/e-mail abre o texto
-pronto para copiar), exportação de PDF/Excel, emissão fiscal e meios de
-pagamento.
+O que ainda é simulado: geração de imagens por IA (o fluxo inteiro é
+navegável sem chave de API — ver [`docs/ESTUDIO-IA.md`](docs/ESTUDIO-IA.md)),
+envio de mensagens (WhatsApp/e-mail abre o texto pronto para copiar),
+exportação de PDF/Excel, emissão fiscal e meios de pagamento.

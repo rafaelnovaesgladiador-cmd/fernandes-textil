@@ -17,6 +17,8 @@ import {
 } from "@/lib/mock";
 import type {
   ActivityLog,
+  AiCreditBalance,
+  AiGeneration,
   Alert,
   Campaign,
   CashSession,
@@ -34,6 +36,7 @@ import type {
   Sale,
   Seller,
   StockMovement,
+  StoreModel,
   Supplier,
   Unit,
 } from "@/lib/types";
@@ -72,6 +75,12 @@ export interface AppState {
 
   campaigns: Campaign[];
   interactions: CustomerInteraction[];
+
+  /** Modelo exclusiva da loja — no máximo uma por empresa. */
+  storeModel: StoreModel | null;
+  aiGenerations: AiGeneration[];
+  aiCredits: AiCreditBalance;
+
   /** Status editado pelo usuário, por id de alerta. */
   alertStatus: Record<string, Alert["status"]>;
 
@@ -80,7 +89,7 @@ export interface AppState {
   counters: Record<string, number>;
 }
 
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 export const DEFAULT_SETTINGS: CompanySettings = {
   companyId: COMPANY_ID,
@@ -149,6 +158,13 @@ export function createSeedState(): AppState {
 
     campaigns: [],
     interactions: [],
+
+    storeModel: null,
+    aiGenerations: [],
+    // Cota inicial da demonstração. Em produção a concessão vem do plano
+    // contratado; aqui só a mecânica importa.
+    aiCredits: { companyId: COMPANY_ID, granted: 30, used: 0 },
+
     alertStatus: {},
 
     activityLog: demoActivityLog,

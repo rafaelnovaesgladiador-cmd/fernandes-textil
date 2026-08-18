@@ -107,6 +107,12 @@ export interface Product {
   minStock: number;
   /** Peso de giro usado pelo gerador de vendas (1 = baixo, 10 = altíssimo). */
   demandWeight: number;
+  /** Foto enviada pela lojista, antes do tratamento. */
+  sourcePhoto?: string;
+  /** Foto de capa padronizada, usada no catálogo e na vitrine. */
+  coverImage?: string;
+  /** Imagem da modelo da loja vestindo esta peça. */
+  tryOnImage?: string;
 }
 
 export interface ProductVariant {
@@ -485,4 +491,72 @@ export interface CompanySettings {
     goal: boolean;
     finance: boolean;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Estúdio de imagens (IA)
+// ---------------------------------------------------------------------------
+
+export type StoreModelOrigin = "descricao" | "imagem";
+
+/**
+ * Modelo exclusiva da loja.
+ *
+ * É criada uma única vez por empresa e vira o ativo central do estúdio:
+ * `providerRef` trava a identidade visual, de modo que toda geração de
+ * provador produz a mesma pessoa, mudando apenas a peça.
+ */
+export interface StoreModel {
+  id: string;
+  companyId: string;
+  name: string;
+  origin: StoreModelOrigin;
+  /** Descrição escrita usada na criação, quando a origem é "descricao". */
+  description?: string;
+  /** Retrato gerado, exibido como referência da modelo. */
+  image: string;
+  /** Trava de identidade — nunca muda depois de criada. */
+  providerRef: string;
+  createdAt: string;
+}
+
+export type AiGenerationKind = "melhoria" | "modelo" | "provador";
+
+export const AI_GENERATION_LABELS: Record<AiGenerationKind, string> = {
+  melhoria: "Foto de capa",
+  modelo: "Modelo da loja",
+  provador: "Provador",
+};
+
+export type AiGenerationStatus = "concluida" | "falhou";
+
+/** Registro de cada geração: alimenta a galeria, o consumo e a auditoria. */
+export interface AiGeneration {
+  id: string;
+  companyId: string;
+  kind: AiGenerationKind;
+  status: AiGenerationStatus;
+  productId?: string;
+  modelId?: string;
+  /** Resultado, quando a geração foi concluída. */
+  image?: string;
+  /** Rótulo do que foi gerado (nome do produto ou da modelo). */
+  subject: string;
+  /** Créditos efetivamente consumidos — falha não cobra. */
+  creditsUsed: number;
+  error?: string;
+  durationMs?: number;
+  createdAt: string;
+}
+
+/**
+ * Cota de gerações por empresa.
+ *
+ * Mesma forma que virá do banco: a concessão e o consumo são registrados
+ * separadamente, e o saldo é sempre derivado (`granted - used`).
+ */
+export interface AiCreditBalance {
+  companyId: string;
+  granted: number;
+  used: number;
 }

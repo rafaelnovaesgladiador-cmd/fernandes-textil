@@ -110,7 +110,15 @@ dos produtos de catálogos publicados — **sem custo, margem, fornecedor ou
 qualquer dado de cliente**. A publicação é controlada por
 `public_catalogs.is_published`.
 
-## 7. Ordem sugerida de implantação
+## 7. Estúdio de imagens
+
+O estúdio (foto de capa, modelo da loja e provador) roda hoje em modo
+simulado, sem chave de API, e **ainda não tem migração**: a modelo, o histórico
+de gerações e o saldo de créditos vivem no estado local, já no formato final.
+O que falta criar no banco e como trocar a simulação pelo provedor real estão
+em [`ESTUDIO-IA.md`](ESTUDIO-IA.md).
+
+## 8. Ordem sugerida de implantação
 
 1. Aplicar as migrações e conferir as políticas com o SQL Editor (tente ler
    dados de outra empresa e confirme que retorna vazio)
@@ -119,3 +127,4 @@ qualquer dado de cliente**. A publicação é controlada por
 4. Migrar escrita, movendo as ações compostas para funções no banco
 5. Publicar o catálogo e configurar o domínio
 6. Ativar cobrança de planos (`companies.plan`)
+7. Criar as tabelas do estúdio e ligar o provedor de imagens
