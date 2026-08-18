@@ -215,6 +215,140 @@ try {
   check("fluxo de venda", false, error.message.slice(0, 140));
 }
 
+console.log("\n== Estúdio de imagens ==");
+try {
+  // Foto qualquer: o provedor simulado não olha o conteúdo, só o fluxo precisa
+  // de um arquivo real para o envio funcionar como no celular da lojista.
+  const GARMENT = {
+    name: "peca.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYEJRIAAADkoAgd0k0IuAAAAAElFTkSuQmCC",
+      "base64"
+    ),
+  };
+
+  const readStudio = () =>
+    page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("lume.data.v1") ?? "{}");
+      return {
+        used: data.aiCredits?.used ?? 0,
+        model: data.storeModel
+          ? { name: data.storeModel.name, ref: data.storeModel.providerRef }
+          : null,
+        generations: (data.aiGenerations ?? []).map((g) => `${g.kind}:${g.status}`),
+        tryOns: (data.products ?? []).filter((p) => p.tryOnImage).length,
+        audit: (data.activityLog ?? []).filter((l) => l.entity === "Estúdio").length,
+      };
+    });
+
+  await goTo(page, "/catalogo?aba=estudio");
+  await page.waitForTimeout(2200);
+  const beforeStudio = await readStudio();
+
+  // 1. A modelo da loja, criada por descrição
+  await page.locator("#modelo-nome").fill("Helena");
+  await page.locator("button").filter({ hasText: /cabelo longo castanho/ }).first().click();
+  await page.locator("button").filter({ hasText: /Criar modelo \(/ }).first().click();
+  await page.waitForTimeout(700);
+  const waiting = await page.evaluate(() => document.body.innerText);
+  check("espera anunciada durante a geração", /gerando|criando|segundos/i.test(waiting));
+
+  await page.waitForTimeout(6000);
+  const withModel = await readStudio();
+  check(
+    "modelo da loja criada",
+    withModel.model !== null,
+    withModel.model ? `${withModel.model.name} · ${withModel.model.ref}` : "sem modelo"
+  );
+  check(
+    "crédito cobrado pela criação",
+    withModel.used === beforeStudio.used + 1,
+    `usados: ${beforeStudio.used} → ${withModel.used}`
+  );
+  check(
+    "geração registrada na auditoria",
+    withModel.audit > beforeStudio.audit &&
+      withModel.generations.includes("modelo:concluida")
+  );
+
+  // 2. O provador, que só existe depois da modelo
+  const locked = await page.evaluate(() => document.body.innerText);
+  check("provador liberado pela modelo", !/liberar o provador/i.test(locked));
+
+  await page.locator("button").filter({ hasText: /Vestido Midi Laise/ }).first().click();
+  await page.waitForTimeout(900);
+  await page.locator("input[type=file]").first().setInputFiles(GARMENT);
+  await page.waitForTimeout(1200);
+  await page.locator("button").filter({ hasText: /Gerar no provador/ }).first().click();
+  await page.waitForTimeout(6500);
+
+  const withTryOn = await readStudio();
+  check(
+    "peça vestida pela modelo",
+    withTryOn.tryOns > withModel.tryOns &&
+      withTryOn.generations.includes("provador:concluida"),
+    `provas: ${withModel.tryOns} → ${withTryOn.tryOns}`
+  );
+  check(
+    "crédito cobrado pela prova",
+    withTryOn.used === withModel.used + 1,
+    `usados: ${withModel.used} → ${withTryOn.used}`
+  );
+
+  // 3. A identidade da modelo é a mesma que gerou a prova
+  const sameModel = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("lume.data.v1") ?? "{}");
+    const prova = (data.aiGenerations ?? []).find((g) => g.kind === "provador");
+    return prova?.modelId?.includes(data.storeModel?.providerRef.replace("mdl_", "")) ?? false;
+  });
+  check("prova gerada com a modelo da loja", sameModel);
+
+  // 4. Foto de capa a partir da página do produto
+  await goTo(page, "/produtos/prd_001");
+  await page.waitForTimeout(1800);
+  await page.locator("button").filter({ hasText: /^Foto$/ }).first().click();
+  await page.waitForTimeout(800);
+  await page.locator("input[type=file]").first().setInputFiles(GARMENT);
+  await page.waitForTimeout(1200);
+  await page.locator("button").filter({ hasText: /Gerar foto de capa/ }).first().click();
+  await page.waitForTimeout(6500);
+
+  const cover = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("lume.data.v1") ?? "{}");
+    const product = (data.products ?? []).find((p) => p.id === "prd_001");
+    return { cover: Boolean(product?.coverImage), source: Boolean(product?.sourcePhoto) };
+  });
+  check(
+    "foto de capa gerada e guardada no produto",
+    cover.cover && cover.source,
+    `capa: ${cover.cover} · original: ${cover.source}`
+  );
+
+  // 5. Cota zerada bloqueia antes de qualquer tentativa
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("lume.data.v1") ?? "{}");
+    data.aiCredits = { ...data.aiCredits, used: data.aiCredits.granted };
+    localStorage.setItem("lume.data.v1", JSON.stringify(data));
+  });
+  await goTo(page, "/catalogo?aba=estudio");
+  await page.reload();
+  await page.waitForTimeout(2400);
+  const blockedText = await page.evaluate(() => document.body.innerText);
+  check(
+    "cota zerada avisa e bloqueia",
+    /créditos acabaram|bloquead/i.test(blockedText)
+  );
+  const disabled = await page.evaluate(() =>
+    [...document.querySelectorAll("button")]
+      .filter((b) => /\(1 crédito\)/.test(b.innerText))
+      .every((b) => b.disabled)
+  );
+  check("botões de geração desabilitados sem saldo", disabled);
+} catch (error) {
+  check("estúdio de imagens", false, error.message.slice(0, 140));
+}
+
 console.log("\n== Celular ==");
 const mobile = await browser.newContext({
   viewport: { width: 390, height: 844 },
@@ -227,7 +361,7 @@ await mpage.goto(HASH_MODE ? BASE : `${BASE}/login`);
 await mpage.evaluate((s) => localStorage.setItem("lume.session.v1", s), SESSION);
 if (HASH_MODE) await mpage.reload();
 
-for (const route of ["/visao-geral", "/vendas/nova", "/produtos", "/financeiro", "/vitrine"]) {
+for (const route of ["/visao-geral", "/vendas/nova", "/produtos", "/catalogo", "/financeiro", "/vitrine"]) {
   await goTo(mpage, route);
   await mpage.waitForTimeout(1200);
   const noHScroll = await mpage.evaluate(

@@ -1,16 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Field } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -21,7 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useStore } from "@/hooks/use-store";
-import { createProduct } from "@/lib/store";
+import { createProduct, enhanceProductPhoto, remainingCredits } from "@/lib/store";
+import { ImageUpload } from "@/components/estudio/image-upload";
+import { AiDisclaimer, CreditsBlocked } from "@/components/estudio/studio-common";
 import { CategorySelect } from "@/components/produtos/category-select";
 import { MarginIndicator } from "@/components/produtos/margin-indicator";
 import { VariantBuilder } from "@/components/produtos/variant-builder";
@@ -61,6 +69,12 @@ type NewProductForm = z.infer<typeof schema>;
 export default function NovoProdutoPage() {
   const router = useRouter();
   const state = useStore();
+
+  // O produto ainda não existe, então a foto espera aqui: a geração da capa
+  // só pode acontecer depois que `createProduct` devolver o id.
+  const [photo, setPhoto] = useState<string | undefined>();
+  const remaining = remainingCredits(state);
+  const creditsBlocked = remaining <= 0;
 
   const suggestions = useMemo(
     () => ({
@@ -113,7 +127,7 @@ export default function NovoProdutoPage() {
 
   const totalPieces = variants.reduce((sum, variant) => sum + variant.stock, 0);
 
-  const onSubmit = handleSubmit((values) => {
+  const onSubmit = handleSubmit(async (values) => {
     const productId = createProduct({
       name: values.name.trim(),
       description: values.description.trim(),
@@ -135,6 +149,27 @@ export default function NovoProdutoPage() {
         values.variants.length === 1 ? "variação" : "variações"
       }`,
     });
+
+    // A foto é um extra: se a geração falhar, o produto continua cadastrado e
+    // a lojista tenta de novo na aba "Foto" do produto.
+    if (photo && !creditsBlocked) {
+      const result = await enhanceProductPhoto({ productId, source: photo });
+      if (result.ok) {
+        toast.success("Foto de capa gerada", {
+          description: "A peça já entra no catálogo com a imagem tratada.",
+        });
+      } else {
+        toast.error("A foto de capa não foi gerada", {
+          description: `${result.error} O produto foi cadastrado e o crédito não foi cobrado — tente de novo na aba Foto.`,
+        });
+      }
+    } else if (photo) {
+      toast.error("A foto de capa não foi gerada", {
+        description:
+          "Seus créditos acabaram. O produto foi cadastrado; envie a foto de novo na aba Foto quando recarregar.",
+      });
+    }
+
     router.push(`/produtos/${productId}`);
   });
 
@@ -292,6 +327,37 @@ export default function NovoProdutoPage() {
               />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" aria-hidden />
+                Foto da peça
+                <span className="text-xs font-normal text-muted-foreground">
+                  (opcional)
+                </span>
+              </CardTitle>
+              <CardDescription>
+                Envie a foto como ela está. Ao salvar, o estúdio gera a capa
+                padronizada do catálogo — 1 crédito, cobrado só se der certo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {creditsBlocked && photo ? (
+                <CreditsBlocked />
+              ) : null}
+              <ImageUpload
+                id="novo-produto-foto"
+                value={photo}
+                onChange={setPhoto}
+                label="Enviar a foto da peça"
+                hint="Peça inteira, boa luz e fundo simples. JPG, PNG ou WEBP de até 4 MB."
+                previewAlt="Foto da peça que será usada para gerar a capa"
+                disabled={formState.isSubmitting}
+              />
+              <AiDisclaimer />
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-4">
@@ -413,7 +479,11 @@ export default function NovoProdutoPage() {
           Cancelar
         </Button>
         <Button type="submit" disabled={formState.isSubmitting}>
-          Salvar produto
+          {formState.isSubmitting
+            ? photo
+              ? "Salvando e gerando a foto…"
+              : "Salvando…"
+            : "Salvar produto"}
         </Button>
       </div>
     </form>

@@ -43,7 +43,10 @@ export function StudioTab({ initialProductId }: { initialProductId?: string }) {
         sectionId={MODEL_SECTION}
       />
 
+      {/* A chave zera o painel quando o produto chega pela URL: voltar do
+          cadastro com outra peça precisa trocar a seleção, não somar a ela. */}
       <TryOnPanel
+        key={initialProductId ?? "sem-produto"}
         model={state.storeModel}
         products={activeProducts}
         remaining={remaining}
