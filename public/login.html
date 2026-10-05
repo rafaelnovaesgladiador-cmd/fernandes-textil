@@ -126,11 +126,15 @@
   </div>
 
   <script>
+    // Destino após o login (apenas caminhos internos, ex.: ?voltar=/portal)
+    const voltarParam = new URLSearchParams(location.search).get('voltar') || '';
+    const DESTINO = /^\/[a-zA-Z0-9\-_/.]*$/.test(voltarParam) && !voltarParam.startsWith('//') ? voltarParam : 'index.html';
+
     // Se já tem token, redirecionar
     const token = localStorage.getItem('ft_token');
     if (token) {
       fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => r.ok ? window.location.href = 'index.html' : null)
+        .then(r => r.ok ? window.location.href = DESTINO : null)
         .catch(() => {});
     }
 
@@ -164,7 +168,7 @@
         if (resp.ok) {
           localStorage.setItem('ft_token', data.token);
           localStorage.setItem('ft_usuario', JSON.stringify(data.usuario));
-          window.location.href = 'index.html';
+          window.location.href = DESTINO;
         } else {
           err.textContent = data.error || 'Erro ao fazer login';
           err.style.display = 'block';

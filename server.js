@@ -861,6 +861,9 @@ app.get('/api/dashboard/vendedora', verifyToken, (req, res) => {
   });
 });
 
+// ==================== PORTAL DO CLIENTE ====================
+app.use(require('./portal')({ db, verifyToken, requirePerfil, jwt, JWT_SECRET, baseDir: __dirname }));
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🧵 Fernandes Têxtil rodando na porta ${PORT}`);

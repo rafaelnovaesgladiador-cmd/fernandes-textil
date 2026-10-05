@@ -45,14 +45,15 @@ function toast(msg, type = 'success') {
 
 // ==================== INIT ====================
 const NAV_PERFIL = {
-  admin: ['dashboard','pedidos','clientes','produtos','estoque','reposicao','financeiro','despesas','usuarios','comissoes'],
-  gerente: ['dashboard','pedidos','clientes','produtos','estoque','reposicao','financeiro','despesas','comissoes'],
+  admin: ['dashboard','portal','pedidos','clientes','produtos','estoque','reposicao','financeiro','despesas','usuarios','comissoes'],
+  gerente: ['dashboard','portal','pedidos','clientes','produtos','estoque','reposicao','financeiro','despesas','comissoes'],
   atendente: ['pdv','meus-pedidos','clientes','produtos'],
   entregador: ['entregas','reposicao']
 };
 
 const NAV_LABELS = {
   dashboard: '📊 Dashboard',
+  portal: '🤝 Portal Cliente',
   pedidos: '📦 Pedidos',
   clientes: '👥 Clientes',
   produtos: '🛍️ Produtos',
@@ -76,6 +77,7 @@ function buildNav() {
 }
 
 function navTo(tela) {
+  if (tela === 'portal') { window.location.href = '/portal'; return; }
   TELA_ATUAL = tela;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.tela === tela));
   const c = document.getElementById('mainContent');
