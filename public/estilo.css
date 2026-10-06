@@ -508,3 +508,16 @@ body.com-cesto .conteudo { padding-bottom: calc(190px + env(safe-area-inset-bott
 @media (min-width: 700px) { .sem-foto i { width: 46px; height: 46px; margin-left: -12px; } }
 @media (max-width: 699px) { .prod .info { padding: 12px 13px 14px; } .prod h3 { font-size: 15px; } .prod .preco { font-size: 13px; } }
 .sem-foto i:first-child { margin-left: 0; }
+
+/* ---------- Baixa automática de pagamentos ---------- */
+.previa-baixa { background: var(--verde-s); color: var(--texto); border-radius: var(--r-s); padding: 11px 14px; font-size: 14px; line-height: 1.6; margin-bottom: 14px; }
+.previa-baixa .ic { display: inline-block; vertical-align: -2px; color: var(--verde); }
+.aplicacoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 13px; }
+.aplicacoes span { display: inline-flex; align-items: center; gap: 4px; background: var(--fill-2); border-radius: 999px; padding: 3px 10px; font-variant-numeric: tabular-nums; }
+.aplicacoes span.quitou { background: var(--verde-s); color: var(--verde); font-weight: 600; }
+.aplicacoes.muted { display: block; color: var(--texto-2); }
+.envio-chips { display: flex; gap: 6px; margin-top: 6px; }
+.envio-chips .chip { padding: 3px 10px; font-size: 12.5px; }
+.envio-num { display: inline-grid; place-items: center; min-width: 24px; height: 24px; border-radius: 12px; background: var(--teal-s); color: var(--teal); font-size: 12px; font-weight: 700; padding: 0 7px; margin-right: 8px; }
+.resumo-entrega { display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 14px; color: var(--texto-2); }
+.resumo-entrega .barra { flex: 1; }

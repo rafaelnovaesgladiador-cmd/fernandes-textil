@@ -179,7 +179,7 @@ function linhaPedido(p) {
   const aceito = !FORA.includes(p.status);
   return `<button class="item" data-acao="abrir-pedido" data-id="${p.id}">
     <div class="meio">
-      <div class="tit">Pedido #${p.numero} ${pillStatus(p.status)}</div>
+      <div class="tit">Pedido #${p.numero} ${pillStatus(p.status)} ${pillPagoPedido(p)}</div>
       <div class="det">${dataBR(p.data_pedido)} · ${resumoCoresHTML(p.itens)}</div>
       ${aceito ? `<div class="barra verde" style="margin-top:9px;max-width:260px"><i style="width:${pct(p.qtd_entregue, p.qtd_total).toFixed(1)}%"></i></div>` : ''}
     </div>
@@ -201,7 +201,6 @@ function pgPedidos() {
 
 function detalhePedidoHTML(p) {
   const d = estado.d;
-  const pags = d.recebimentos.filter(g => g.pedido_id === p.id);
   const acoes = p.status === 'Solicitado'
     ? `<button class="btn btn-perigo" data-acao="cancelar-solicitacao" data-id="${p.id}">Cancelar solicitação</button>`
     : p.status !== 'Cancelado' ? `<button class="btn" data-acao="informar-pagamento" data-id="${p.id}">${icone('receber', 18)} Informar pagamento</button>` : '';
@@ -211,20 +210,15 @@ function detalhePedidoHTML(p) {
       <div><span>Feito em</span><b>${dataBR(p.data_pedido)}</b></div>
       <div><span>Previsão</span><b>${dataBR(p.previsao_entrega)}</b></div>
       <div><span>${p.status === 'Solicitado' ? 'Valor estimado' : 'Valor'}</span><b>${brl(p.valor_total)}</b></div>
-      <div><span>Pago</span><b>${brl(p.valor_pago)}</b></div>
+      <div><span>${p.quitado ? 'Pago ✓' : 'Falta pagar'}</span><b style="color:${p.quitado ? 'var(--verde)' : p.falta_pagar > 0.004 ? 'var(--laranja)' : 'inherit'}">${p.quitado ? brl(p.valor_pago) : brl(p.falta_pagar)}</b></div>
     </div>
     <div class="bloco-tit">Itens</div>
     ${itensPedidoHTML(p, { mostrarEntrega: !FORA.includes(p.status) })}
     ${p.observacoes ? `<div class="bloco-tit">Observações</div><div class="obs">${esc(p.observacoes)}</div>` : ''}
     ${FORA.includes(p.status) ? '' : `<div class="bloco-tit">Entregas (${p.entregas.length})</div>
-      ${p.entregas.length ? p.entregas.map(e => `<div class="cartao-sub">
-          <div class="cab-sub"><b>${dataBR(e.data)} · ${qtd(e.quantidade)} peças</b></div>
-          ${e.itens.length ? `<div class="linhas-cor">${e.itens.map(i => `<span>${i.cor ? dot(i.hex) + esc(i.cor) : esc(i.produto_nome)} <b>${qtd(i.quantidade)}</b></span>`).join('')}</div>` : ''}
-          ${e.observacao ? `<div class="txt">${esc(e.observacao)}</div>` : ''}
-          ${anexosHTML(e.anexos, 'entrega', e.id, ctxAnexos)}
-        </div>`).join('') : '<p class="muted" style="margin:0 4px">Nenhuma entrega ainda.</p>'}
-      <div class="bloco-tit">Pagamentos deste pedido</div>
-      ${pags.length ? pags.map(g => `<div class="cartao-sub"><div class="cab-sub"><b>${brl(g.valor)}</b>${pillPagamento(g.status)}</div><div class="txt">${esc(g.forma || '')} · ${dataBR(g.data)}</div></div>`).join('') : '<p class="muted" style="margin:0 4px">Nenhum pagamento vinculado.</p>'}`}
+      ${enviosHTML(p, ctxAnexos)}
+      <div class="bloco-tit">Pagamento do pedido</div>
+      ${pagamentosDoPedidoHTML(p, d.recebimentos)}`}
     ${p.anexos.length ? `<div class="bloco-tit">Arquivos</div>${anexosHTML(p.anexos, 'pedido', p.id, { ...ctxAnexos, podeAnexar: false })}` : ''}
     ${acoes ? `<div class="rodape-acoes">${acoes}</div>` : ''}`;
 }
@@ -256,7 +250,8 @@ function pgPagamentos() {
   if (!d.recebimentos.length) return h + vazioHTML('financeiro', 'Nenhum pagamento ainda', 'Use "Informar pagamento" para enviar o comprovante.');
   return h + `<p class="lista-rot">Histórico de pagamentos</p><div class="lista">${d.recebimentos.map(g => `<div class="item-bloco">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b class="num" style="font-size:17px">${brl(g.valor)}</b>${pillPagamento(g.status)}</div>
-      <div class="muted" style="font-size:13.5px;margin-top:2px">${esc(g.forma || '')} · ${dataBR(g.data)}${g.pedido_numero ? ` · Pedido #${g.pedido_numero}` : ''}</div>
+      <div class="muted" style="font-size:13.5px;margin-top:2px">${esc(g.forma || '')} · ${dataBR(g.data)}</div>
+      ${aplicacoesHTML(g)}
       ${g.observacao ? `<div class="obs" style="margin-top:8px;box-shadow:none;background:var(--fill-2)">${esc(g.observacao)}</div>` : ''}
       ${anexosHTML(g.anexos, 'pagamento', g.id, ctxAnexos)}
     </div>`).join('')}</div>`;
@@ -318,12 +313,15 @@ const acoes = {
   'informar-pagamento'(el) {
     const d = estado.d;
     const pedidoId = el.dataset.id ? Number(el.dataset.id) : null;
+    const ped = pedidoId ? d.pedidos.find(x => x.id === pedidoId) : null;
+    const sugestao = ped ? ped.falta_pagar : d.resumo.saldo;
     estado.detalhe = null;
     const folha = abrirFolha({
       titulo: 'Informar pagamento',
-      corpo: `<p class="ajuda">Envie o comprovante. A Fernandes Têxtil confere e confirma o pagamento.</p>${formPagamentoHTML({ formas: d.formas_pagamento, pedidos: d.pedidos, pedidoId, botao: 'Enviar pagamento' })}`,
+      corpo: `<p class="ajuda">Informe o valor pago e envie o comprovante. Não precisa escolher o pedido: depois que a Fernandes Têxtil confirmar, o valor dá baixa sozinho nos pedidos em aberto, do mais antigo para o mais novo.</p>${formPagamentoHTML({ formas: d.formas_pagamento, pedidos: d.pedidos, botao: 'Enviar pagamento', valor: sugestao > 0.004 ? precoParaCampo(sugestao) : '' })}`,
       aoFechar: pedidoId ? () => abrirPedido(pedidoId) : null
     });
+    ligarPreviaBaixa(folha, d.pedidos);
     aoEnviar(folha, '#form-pagamento', async f => {
       await requisicao(`${BASE}/pagamentos`, { metodo: 'POST', corpo: await dadosDoForm(f) });
       toast('Pagamento enviado! Aguardando confirmação.');

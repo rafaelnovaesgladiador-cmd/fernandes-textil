@@ -150,7 +150,7 @@ function linhaPedido(p) {
   const aceito = !FORA.includes(p.status);
   return `<button class="item" data-acao="abrir-pedido" data-id="${p.id}">
     <div class="meio">
-      <div class="tit">Pedido #${p.numero} ${pillStatus(p.status)}</div>
+      <div class="tit">Pedido #${p.numero} ${pillStatus(p.status)} ${pillPagoPedido(p)}</div>
       <div class="det">${dataBR(p.data_pedido)} · ${resumoCoresHTML(p.itens)}</div>
       ${aceito ? `<div class="barra verde" style="margin-top:9px;max-width:260px"><i style="width:${pct(p.qtd_entregue, p.qtd_total).toFixed(1)}%"></i></div>` : ''}
     </div>
@@ -178,7 +178,6 @@ function pgPedidos() {
 
 function detalhePedidoHTML(p) {
   const d = estado.d;
-  const recs = d.recebimentos.filter(g => g.pedido_id === p.id);
   const margemPct = p.valor_total > 0 ? (p.comissao / p.valor_total) * 100 : 0;
   let acoes;
   if (p.status === 'Solicitado') {
@@ -202,7 +201,7 @@ function detalhePedidoHTML(p) {
       <div><span>Feito em</span><b>${dataBR(p.data_pedido)}</b></div>
       <div><span>Previsão</span><b>${dataBR(p.previsao_entrega)}</b></div>
       <div><span>Valor</span><b>${brl(p.valor_total)}</b></div>
-      <div><span>Recebido</span><b>${brl(p.valor_pago)}</b></div>
+      <div><span>${p.quitado ? 'Pago ✓' : 'Falta pagar'}</span><b style="color:${p.quitado ? 'var(--verde)' : p.falta_pagar > 0.004 ? 'var(--laranja)' : 'inherit'}">${p.quitado ? brl(p.valor_pago) : brl(p.falta_pagar)}</b></div>
     </div>
     <div class="bloco-tit">Itens</div>
     ${itensPedidoHTML(p, { mostrarEntrega: !FORA.includes(p.status) })}
@@ -211,16 +210,10 @@ function detalhePedidoHTML(p) {
       <div><span>Sua comissão</span><b style="color:var(--verde)">${brl(p.comissao)} <small style="font-size:12px">(${margemPct.toFixed(0)}%)</small></b></div>
     </div>
     ${p.observacoes ? `<div class="bloco-tit">Observações</div><div class="obs">${esc(p.observacoes)}</div>` : ''}
-    <div class="bloco-tit">Envios ao cliente (${p.entregas.length})</div>
-    ${p.entregas.length ? p.entregas.map(e => `<div class="cartao-sub">
-        <div class="cab-sub"><b>${dataBR(e.data)} · ${qtd(e.quantidade)} peças</b>
-          <button class="btn btn-texto" style="color:var(--vermelho)" data-acao="excluir-envio" data-id="${e.id}">Excluir</button></div>
-        ${e.itens.length ? `<div class="linhas-cor">${e.itens.map(i => `<span>${i.cor ? dot(i.hex) + esc(i.cor) : esc(i.produto_nome)} <b>${qtd(i.quantidade)}</b></span>`).join('')}</div>` : ''}
-        ${e.observacao ? `<div class="txt">${esc(e.observacao)}</div>` : ''}
-        ${anexosHTML(e.anexos, 'entrega', e.id, ctxAnexos)}
-      </div>`).join('') : '<p class="muted" style="margin:0 4px">Nenhum envio registrado.</p>'}
-    <div class="bloco-tit">Recebimentos deste pedido</div>
-    ${recs.length ? recs.map(g => `<div class="cartao-sub"><div class="cab-sub"><b>${brl(g.valor)}</b>${pillPagamento(g.status)}</div><div class="txt">${esc(g.forma || '')} · ${dataBR(g.data)}</div></div>`).join('') : '<p class="muted" style="margin:0 4px">Nenhum recebimento vinculado.</p>'}
+    ${FORA.includes(p.status) ? '' : `<div class="bloco-tit">Envios ao cliente (${p.entregas.length})</div>
+    ${enviosHTML(p, ctxAnexos, { excluir: true })}
+    <div class="bloco-tit">Pagamento do pedido</div>
+    ${pagamentosDoPedidoHTML(p, d.recebimentos)}`}
     <div class="bloco-tit">Arquivos do pedido</div>
     ${anexosHTML(p.anexos, 'pedido', p.id, ctxAnexos)}
     <div class="rodape-acoes">${acoes}</div>`;
@@ -302,12 +295,13 @@ function formEnvio(p) {
   estado.detalhe = null;
   const folha = abrirFolha({
     titulo: `Envio · Pedido #${p.numero}`,
-    corpo: `<p class="ajuda">Informe quanto de cada cor está saindo agora. O estoque é baixado automaticamente.</p>
+    corpo: `<p class="ajuda">Informe quanto de cada cor está saindo <b>agora</b>. Pode ser só uma parte: o restante fica pendente e você registra outro envio depois, até completar. O estoque é baixado automaticamente.</p>
       ${semEstoque ? `<div class="aviso aviso-laranja" style="margin-bottom:14px">${icone('alerta')}<span>Sem estoque para este pedido. Lance a entrada do fornecedor antes de enviar.</span></div>` : ''}
       <form id="form-envio" class="form">
         <div class="grupo">${linhas.map((l, i) => `<div class="envio-linha">
             <div class="meio"><b>${l.cor ? dot(l.hex, 14) + ' ' + esc(l.cor) : esc(l.produto_nome)}</b>
-              <small>${esc(l.produto_nome)} · falta ${qtd(l.falta)} · estoque ${qtd(l.saldo)}</small></div>
+              <small>${esc(l.produto_nome)} · falta ${qtd(l.falta)} · estoque ${qtd(l.saldo)}</small>
+              <div class="envio-chips"><button type="button" class="chip" data-env="${i}" data-v="${Math.max(0, Math.min(l.falta, l.saldo))}">Tudo possível</button><button type="button" class="chip chip-x" data-env="${i}" data-v="0">Não enviar</button></div></div>
             <input name="q${i}" inputmode="numeric" value="${numParaCampo(Math.max(0, Math.min(l.falta, l.saldo)))}" aria-label="Quantidade de ${esc(l.cor || l.produto_nome)}">
           </div>`).join('')}</div>
         <div class="grupo">
@@ -318,6 +312,10 @@ function formEnvio(p) {
         <button class="btn btn-bloco" type="submit">${icone('caminhao', 18)} Registrar envio</button>
       </form>`,
     aoFechar: () => abrirPedido(p.id)
+  });
+  folha.addEventListener('click', e => {
+    const b = e.target.closest('[data-env]');
+    if (b) folha.querySelector(`[name=q${b.dataset.env}]`).value = numParaCampo(Number(b.dataset.v));
   });
   aoEnviar(folha, '#form-envio', async form => {
     const itens = linhas.map((l, i) => ({ produto_id: l.produto_id, cor: l.cor, quantidade: lerNumero(form[`q${i}`].value) || 0 })).filter(x => x.quantidade > 0);
@@ -468,7 +466,8 @@ function pgFinanceiro() {
 function blocoRecebimento(g) {
   return `<div class="item-bloco">
     <div class="cab-sub" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b class="num" style="font-size:17px">${brl(g.valor)}</b>${pillPagamento(g.status)}</div>
-    <div class="muted" style="font-size:13.5px;margin-top:2px">${esc(g.forma || '')} · ${dataBR(g.data)}${g.pedido_numero ? ` · Pedido #${g.pedido_numero}` : ''} · ${g.informado_por === 'cliente' ? 'informado pelo cliente' : 'registrado por você'}</div>
+    <div class="muted" style="font-size:13.5px;margin-top:2px">${esc(g.forma || '')} · ${dataBR(g.data)} · ${g.informado_por === 'cliente' ? 'informado pelo cliente' : 'registrado por você'}</div>
+    ${aplicacoesHTML(g)}
     ${g.observacao ? `<div class="obs" style="margin-top:8px;box-shadow:none;background:var(--fill-2)">${esc(g.observacao)}</div>` : ''}
     ${anexosHTML(g.anexos, 'pagamento', g.id, ctxAnexos)}
     <div class="acoes" style="margin-top:12px">
@@ -499,7 +498,9 @@ function pgAjustes() {
       ${c ? `<button class="item" data-acao="editar-cliente"><span class="avatar">${esc(iniciais(c.nome))}</span>
           <div class="meio"><div class="tit">${esc(c.nome)} ${c.ativo ? '' : '<span class="pill p-cinza">Link desativado</span>'}</div><div class="det">${esc([c.contato, c.telefone].filter(Boolean).join(' · ') || 'Toque para completar o cadastro')}</div></div><span class="chev">${icone('seta', 16)}</span></button>
         <button class="item" data-acao="compartilhar"><span class="ico-q t-azul">${icone('link', 17)}</span><div class="meio"><div class="tit">Link de acompanhamento</div><div class="det">Enviar pelo WhatsApp, copiar ou abrir</div></div><span class="chev">${icone('seta', 16)}</span></button>
-        <button class="item" data-acao="novo-link"><span class="ico-q t-cinza">${icone('cadeado', 17)}</span><div class="meio"><div class="tit">Gerar novo link</div><div class="det">Desativa o link atual</div></div></button>`
+        <button class="item" data-acao="novo-link"><span class="ico-q t-cinza">${icone('cadeado', 17)}</span><div class="meio"><div class="tit">Gerar novo link</div><div class="det">Desativa o link atual</div></div></button>
+        <button class="item" data-acao="limpar-historico"><span class="ico-q t-laranja">${icone('atividade', 17)}</span><div class="meio"><div class="tit">Limpar histórico</div><div class="det">Apaga a atividade; pedidos e pagamentos continuam</div></div></button>
+        <button class="item destrutivo" data-acao="excluir-cliente"><span class="ico-q t-vermelho">${icone('lixo', 17)}</span><div class="meio"><div class="tit">Excluir cliente e recomeçar</div><div class="det" style="color:var(--texto-2)">Apaga pedidos, envios, pagamentos e histórico dele</div></div></button>`
         : `<button class="item acao-item" data-acao="editar-cliente"><span class="ico-q t-azul">${icone('mais', 17)}</span>Cadastrar cliente</button>`}
     </div>
     <p class="lista-rot">Fornecedor</p><div class="lista">
@@ -739,12 +740,14 @@ const acoes = {
     const d = estado.d;
     if (!d.cliente) return toast('Cadastre o cliente primeiro', 'erro');
     const pedidoId = el.dataset.id ? Number(el.dataset.id) : null;
+    const ped = pedidoId ? d.pedidos.find(x => x.id === pedidoId) : null;
     estado.detalhe = null;
     const folha = abrirFolha({
       titulo: 'Recebimento do cliente',
-      corpo: `<p class="ajuda">Entra como confirmado e abate do valor a receber.</p>${formPagamentoHTML({ formas: d.formas_pagamento, pedidos: d.pedidos, pedidoId, botao: 'Salvar recebimento' })}`,
+      corpo: `<p class="ajuda">Entra como confirmado e dá baixa automática nos pedidos em aberto, do mais antigo para o mais novo.</p>${formPagamentoHTML({ formas: d.formas_pagamento, pedidos: d.pedidos, botao: 'Salvar recebimento', valor: ped && ped.falta_pagar > 0 ? precoParaCampo(ped.falta_pagar) : '' })}`,
       aoFechar: pedidoId ? () => abrirPedido(pedidoId) : null
     });
+    ligarPreviaBaixa(folha, d.pedidos);
     aoEnviar(folha, '#form-pagamento', async f => {
       await api('/recebimentos', { metodo: 'POST', corpo: await dadosDoForm(f) });
       toast('Recebimento registrado');
@@ -759,7 +762,7 @@ const acoes = {
     const folha = abrirFolha({
       titulo: 'Pagamento ao fornecedor',
       corpo: `<p class="ajuda">Abate do valor a pagar${d.fornecedor.nome ? ` a ${esc(d.fornecedor.nome)}` : ''}. Hoje: <b>${brl(d.resumo.a_pagar)}</b>.</p>
-        ${formPagamentoHTML({ formas: d.formas_pagamento, comPedido: false, botao: 'Salvar pagamento', valor: compra ? precoParaCampo(compra.valor_total) : '' })}`
+        ${formPagamentoHTML({ formas: d.formas_pagamento, comPrevia: false, botao: 'Salvar pagamento', valor: compra ? precoParaCampo(compra.valor_total) : '' })}`
     });
     aoEnviar(folha, '#form-pagamento', async f => {
       const fd = await dadosDoForm(f);
@@ -892,6 +895,42 @@ const acoes = {
   async 'novo-link'() {
     if (!confirm('Gerar um novo link? O link atual para de funcionar e você precisará enviar o novo ao cliente.')) return;
     try { await api('/cliente/novo-link', { metodo: 'POST' }); await carregar(); compartilharLink(); } catch (e) { toast(e.message, 'erro'); }
+  },
+  'limpar-historico'() {
+    const folha = abrirFolha({
+      titulo: 'Limpar histórico',
+      corpo: `<p class="ajuda">Apaga a lista de atividade (mensagens e registros). Pedidos, envios, pagamentos, estoque e comprovantes <b>não</b> são apagados.</p>
+        <form id="form-limpar" class="form"><div class="grupo">
+          <label class="interruptor">Apagar também os registros só seus (fornecedor, estoque, comissão)<input type="checkbox" name="tudo"></label>
+        </div><button class="btn btn-perigo btn-bloco" type="submit">Limpar histórico</button></form>`
+    });
+    aoEnviar(folha, '#form-limpar', async f => {
+      if (!confirm('Limpar o histórico? Isso não pode ser desfeito.')) return;
+      const r = await api('/cliente/limpar-historico', { metodo: 'POST', corpo: { tudo: f.tudo.checked } });
+      fecharFolha();
+      toast(`${r.apagados} registro(s) apagados`);
+      estado.vistoAte = 0;
+      await carregar();
+    });
+  },
+  'excluir-cliente'() {
+    const c = estado.d.cliente;
+    const folha = abrirFolha({
+      titulo: 'Excluir cliente',
+      corpo: `<div class="aviso aviso-vermelho" style="margin-bottom:16px">${icone('alerta')}<span>Isto apaga ${esc(c.nome)} com todos os pedidos, envios, pagamentos, comprovantes e o histórico dele. O link atual para de funcionar. Não pode ser desfeito.</span></div>
+        <p class="ajuda">Continuam: fornecedor, produtos e cores, entradas do fornecedor, pagamentos ao fornecedor e retiradas. Depois você cadastra o cliente de novo e envia um link novo.</p>
+        <form id="form-excluir" class="form"><div class="grupo">
+          <label class="interruptor">Manter o estoque como está hoje<input type="checkbox" name="manter" checked></label>
+          <p class="muted" style="font-size:13px;margin-top:8px">Desligue só se os envios eram de teste e as peças devem voltar ao estoque.</p>
+          <div class="campo" style="margin-top:14px"><label>Digite EXCLUIR para confirmar</label><input name="confirmacao" autocomplete="off" autocapitalize="characters" required></div>
+        </div><button class="btn btn-perigo btn-bloco" type="submit">${icone('lixo', 18)} Excluir cliente</button></form>`
+    });
+    aoEnviar(folha, '#form-excluir', async f => {
+      await api('/cliente/excluir', { metodo: 'POST', corpo: { confirmacao: f.confirmacao.value, manter_estoque: f.manter.checked } });
+      fecharFolha();
+      toast('Cliente excluído');
+      await carregar();
+    });
   },
   'novo-produto'() { formProduto(null); },
   'editar-produto'(el) { formProduto(achar('produtos', el)); },

@@ -25,10 +25,21 @@ Para colocar na internet, veja [HOSPEDAGEM.md](HOSPEDAGEM.md).
 | Cliente monta o pedido | Link do cliente → **Fazer pedido** | Escolhe o produto, toca na cor, digita a quantidade e adiciona ao cesto. Ao trocar de cor a quantidade zera. No fim revisa o cesto e envia. |
 | Você aprova | **Pedidos → Para aprovar** | Aceitar, ajustar (quantidade/preço/prazo) ou recusar com motivo. Antes de aceito, não entra no saldo. |
 | Mercadoria chega do fornecedor | **Estoque → Nova entrada** | Lança cor por cor com o custo. **Soma no estoque** e no valor **a pagar**. Anexe a nota. |
-| Envio ao cliente | Pedido → **Registrar envio** | Informa quanto de cada cor saiu. **Baixa do estoque**; o status muda sozinho para Entregue parcialmente / Entregue. Anexe o canhoto. |
-| Cliente paga | Link → **Pagamentos → Informar pagamento** | Fica "Aguardando confirmação" até você confirmar em **Financeiro → Cliente**. |
+| Envio ao cliente (pode ser em partes) | Pedido → **Registrar envio** | Informa quanto de cada cor saiu **agora**; repita quantas vezes precisar até completar. **Baixa do estoque**; o status muda sozinho para Entregue parcialmente / Entregue. O cliente vê cada envio numerado (1º, 2º…) e quanto falta. Anexe o canhoto. |
+| Cliente paga | Link → **Pagamentos → Informar pagamento** | Só informa o valor e envia o comprovante, sem escolher pedido. Fica "Aguardando confirmação" até você confirmar em **Financeiro → Cliente**. |
+| Baixa automática | Automático | Ao confirmar, o valor **quita os pedidos do mais antigo para o mais novo**; se cobrir só parte de um pedido, abate o que deu; se sobrar, vira crédito para os próximos. Cada pagamento mostra onde deu baixa. |
 | Você paga o fornecedor | **Financeiro → Fornecedor** | Abate do valor a pagar. Anexe o comprovante. |
 | Você retira a comissão | **Financeiro → Comissão** | Registra a retirada. Anexe o comprovante se quiser. |
+
+## Começar do zero com o cliente
+
+Em **Ajustes → Cliente**:
+
+- **Limpar histórico:** apaga a lista de atividade; pedidos e pagamentos continuam.
+- **Excluir cliente e recomeçar:** apaga o cliente com pedidos, envios, pagamentos,
+  comprovantes e histórico dele (digite EXCLUIR para confirmar). Fornecedor, produtos,
+  entradas e retiradas continuam, e o estoque fica como está. Depois cadastre o
+  cliente de novo e envie o link novo.
 
 ## Painel (Início)
 

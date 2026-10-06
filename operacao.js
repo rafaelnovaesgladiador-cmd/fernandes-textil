@@ -346,7 +346,7 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
       });
       p.entregas = entregas.filter(e => e.pedido_id === p.id);
       p.qtd_entregue = p.entregas.reduce((s, e) => s + e.quantidade, 0);
-      p.valor_pago = recebimentos.filter(g => g.pedido_id === p.id && g.status === 'Confirmado').reduce((s, g) => s + g.valor, 0);
+      p.valor_pago = 0;
       // Itens de versões antigas não têm custo gravado: usa o custo atual do produto
       for (const i of p.itens) if (!i.custo_unitario) i.custo_unitario = (produtos.find(x => x.id === i.produto_id) || {}).custo || 0;
       p.custo_total = arred(p.itens.reduce((s, i) => s + i.quantidade * i.custo_unitario, 0));
@@ -375,6 +375,30 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
     for (const i of envioItens) linhaEst(i.produto_id, i.produto_nome, i.cor).saidas += i.quantidade;
     for (const a of ajustes) linhaEst(a.produto_id, a.produto_nome, a.cor).ajustes += a.quantidade;
     const aceitos = pedidos.filter(p => !FORA_DO_SALDO.includes(p.status));
+
+    // Baixa automática: cada pagamento confirmado quita os pedidos aceitos do mais antigo
+    // para o mais novo (se foi vinculado a um pedido, ele é quitado primeiro). O que sobra vira crédito.
+    const fila = [...aceitos].sort((a, b) => (a.data_pedido < b.data_pedido ? -1 : a.data_pedido > b.data_pedido ? 1 : a.numero - b.numero));
+    const aplicar = (g, p, livre) => {
+      const v = arred(Math.min(livre, p.valor_total - p.valor_pago));
+      if (v <= 0) return 0;
+      p.valor_pago = arred(p.valor_pago + v);
+      g.aplicacoes.push({ pedido_id: p.id, numero: p.numero, valor: v, quitou: p.valor_pago >= p.valor_total - 0.004 });
+      return v;
+    };
+    const confirmados = recebimentos.filter(g => g.status === 'Confirmado').sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : a.id - b.id));
+    for (const g of recebimentos) g.aplicacoes = [];
+    for (const g of confirmados) {
+      let livre = g.valor;
+      const vinculado = g.pedido_id && fila.find(p => p.id === g.pedido_id);
+      if (vinculado) livre -= aplicar(g, vinculado, livre);
+      for (const p of fila) { if (livre <= 0.004) break; livre -= aplicar(g, p, livre); }
+      g.credito = arred(Math.max(0, livre));
+    }
+    for (const p of pedidos) {
+      p.falta_pagar = FORA_DO_SALDO.includes(p.status) ? 0 : arred(Math.max(0, p.valor_total - p.valor_pago));
+      p.quitado = !FORA_DO_SALDO.includes(p.status) && p.valor_total > 0 && p.falta_pagar <= 0.004;
+    }
     for (const p of aceitos) for (const i of p.itens) if (i.falta > 0) linhaEst(i.produto_id, i.produto_nome, i.cor).a_entregar += i.falta;
     const estoque = [...est.values()].map(l => {
       const saldo = l.entradas - l.saidas + l.ajustes;
@@ -445,6 +469,15 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
     };
   }
 
+  // Registra no histórico onde um pagamento confirmado deu baixa
+  function registrarBaixa(pagamentoId) {
+    const g = calcular().recebimentos.find(x => x.id === Number(pagamentoId));
+    if (!g || g.status !== 'Confirmado' || (!g.aplicacoes.length && !g.credito)) return;
+    const partes = g.aplicacoes.map(a => `pedido #${a.numero} ${a.quitou ? 'quitado' : `abatido em ${brl(a.valor)}`}`);
+    if (g.credito > 0.004) partes.push(`${brl(g.credito)} de crédito`);
+    registrar({ pedidoId: g.aplicacoes.length === 1 ? g.aplicacoes[0].pedido_id : null, tipo: 'pagamento', descricao: `Baixa automática do pagamento de ${brl(g.valor)}: ${partes.join(', ')}` });
+  }
+
   // Erros de validação viram 400 (e o upload é descartado)
   const acao = fn => (req, res) => {
     try { fn(req, res); } catch (e) { descartarUpload(req); res.status(400).json({ error: e.message || 'Erro' }); }
@@ -480,6 +513,48 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
     for (const o of ouvintes) if (!o.admin && o.token === c.token) o.res.end();
     notificar({ tipo: 'cliente', privado: true });
     res.json({ token });
+  }));
+
+  // Limpa a atividade (histórico). Por padrão só o que o cliente vê; opcionalmente tudo.
+  router.post('/api/op/cliente/limpar-historico', exigirAdmin, acao((req, res) => {
+    const tudo = !!req.body.tudo;
+    const n = db.prepare(`DELETE FROM portal_historico ${tudo ? '' : 'WHERE privado = 0'}`).run().changes;
+    registrar({ tipo: 'cliente', privado: true, descricao: `Histórico limpo (${n} registro(s) apagados${tudo ? ', inclusive os só seus' : ''})` });
+    notificar({ tipo: 'cliente' });
+    res.json({ apagados: n });
+  }));
+
+  // Exclui o cliente com pedidos, envios, pagamentos, comprovantes e histórico dele, para começar do zero.
+  // Fornecedor, produtos, entradas, pagamentos ao fornecedor e retiradas são mantidos.
+  router.post('/api/op/cliente/excluir', exigirAdmin, acao((req, res) => {
+    if (!clienteAtual()) throw new Error('Nenhum cliente cadastrado');
+    if (String(req.body.confirmacao || '').trim().toUpperCase() !== 'EXCLUIR') throw new Error('Digite EXCLUIR para confirmar');
+    const manterEstoque = req.body.manter_estoque !== false;
+    const clientes = db.prepare('SELECT * FROM portal_clientes').all();
+    db.transaction(() => {
+      // Para o estoque continuar igual, as peças já enviadas viram um ajuste de saída
+      if (manterEstoque) {
+        const saidas = db.prepare('SELECT produto_id, produto_nome, cor, SUM(quantidade) AS q FROM op_envio_itens GROUP BY produto_id, produto_nome, cor').all();
+        const ins = db.prepare('INSERT INTO op_ajustes_estoque (produto_id, produto_nome, cor, quantidade, motivo) VALUES (?, ?, ?, ?, ?)');
+        for (const s of saidas) if (s.q) ins.run(s.produto_id, s.produto_nome, s.cor, -s.q, 'Envios de cliente excluído');
+      }
+      const anexos = db.prepare("SELECT arquivo FROM portal_anexos WHERE tipo IN ('pedido', 'entrega', 'pagamento')").all();
+      for (const a of anexos) apagarArquivo(a.arquivo);
+      db.prepare("DELETE FROM portal_anexos WHERE tipo IN ('pedido', 'entrega', 'pagamento')").run();
+      db.prepare('DELETE FROM op_envio_itens').run();
+      db.prepare('DELETE FROM portal_entregas').run();
+      db.prepare('DELETE FROM portal_pagamentos').run();
+      db.prepare('DELETE FROM portal_pedido_itens').run();
+      db.prepare('DELETE FROM portal_pedidos').run();
+      db.prepare('DELETE FROM portal_historico WHERE privado = 0').run();
+      db.prepare('UPDATE portal_historico SET pedido_id = NULL').run();
+      db.prepare('DELETE FROM portal_clientes').run();
+    })();
+    for (const o of ouvintes) if (!o.admin) o.res.end();
+    db.prepare('INSERT INTO portal_historico (cliente_id, tipo, descricao, autor, autor_nome, privado) VALUES (0, ?, ?, ?, ?, 1)')
+      .run('cliente', `Cliente ${clientes.map(c => c.nome).join(', ')} excluído com todos os pedidos e pagamentos${manterEstoque ? ' (estoque mantido)' : ''}`, 'empresa', EMPRESA);
+    notificar({ tipo: 'cliente', privado: true });
+    res.json({ success: true });
   }));
 
   router.put('/api/op/fornecedor', exigirAdmin, acao((req, res) => {
@@ -776,6 +851,7 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
         .run(cli.id, ped ? ped.id : null, g.data, g.valor, g.forma, g.observacao, 'Confirmado', 'empresa');
       const anexo = salvarAnexo('pagamento', Number(r.lastInsertRowid), req.file);
       registrar({ pedidoId: ped ? ped.id : null, tipo: 'pagamento', descricao: `Pagamento recebido: ${brl(g.valor)} via ${g.forma} em ${dataBR(g.data)}${ped ? ` (pedido #${ped.numero})` : ''}${anexo ? ' — com comprovante' : ''}` });
+      registrarBaixa(r.lastInsertRowid);
     })();
     notificar({ tipo: 'pagamento', descricao: `Pagamento de ${brl(g.valor)} registrado` });
     res.json({ success: true });
@@ -791,6 +867,7 @@ module.exports = function criarOperacao({ db, exigirAdmin, exigirAdminGet, baseD
       const motivo = texto(req.body.motivo, 300);
       const verbo = { Confirmado: 'confirmado', Recusado: 'recusado', 'Aguardando confirmação': 'voltou para aguardando confirmação' }[status];
       registrar({ pedidoId: g.pedido_id, tipo: 'pagamento', descricao: `Pagamento de ${brl(g.valor)} (${dataBR(g.data)}) ${verbo}${motivo ? `: ${motivo}` : ''}` });
+      if (status === 'Confirmado') registrarBaixa(g.id);
       notificar({ tipo: 'pagamento', descricao: `Pagamento ${verbo}` });
     }
     res.json({ success: true });

@@ -282,7 +282,65 @@ function historicoHTML(historico, { nomeAutor, destaqueAte = null, privados = fa
   return html + '</div>';
 }
 
-function formPagamentoHTML({ formas, pedidos = [], pedidoId = null, botao = 'Salvar', comPedido = true, valor = '' }) {
+// Simula a baixa automática: o valor quita os pedidos em aberto do mais antigo para o mais novo
+function previaBaixaHTML(valor, pedidos) {
+  let livre = valor;
+  const abertos = pedidos.filter(p => p.falta_pagar > 0.004)
+    .sort((a, b) => (a.data_pedido < b.data_pedido ? -1 : a.data_pedido > b.data_pedido ? 1 : a.numero - b.numero));
+  if (!(valor > 0)) {
+    if (!abertos.length) return '<span class="muted">Nenhum pedido com valor em aberto.</span>';
+    return `<b>Em aberto:</b> ${abertos.map(p => `Pedido #${p.numero} ${brl(p.falta_pagar)}`).join(' · ')}`;
+  }
+  const linhas = [];
+  for (const p of abertos) {
+    if (livre <= 0.004) break;
+    const v = Math.min(livre, p.falta_pagar);
+    livre -= v;
+    linhas.push(v >= p.falta_pagar - 0.004 ? `${icone('check', 14)} Quita o pedido #${p.numero} (${brl(v)})` : `Abate ${brl(v)} do pedido #${p.numero} (faltarão ${brl(p.falta_pagar - v)})`);
+  }
+  if (livre > 0.004) linhas.push(`Sobra ${brl(livre)} de crédito para os próximos pedidos`);
+  return `<b>Baixa automática:</b><br>${linhas.join('<br>')}`;
+}
+function ligarPreviaBaixa(folha, pedidos) {
+  const campo = folha.querySelector('[name=valor]');
+  const caixa = folha.querySelector('#previaBaixa');
+  if (!campo || !caixa) return;
+  const atualizar = () => { caixa.innerHTML = previaBaixaHTML(lerNumero(campo.value), pedidos); };
+  campo.addEventListener('input', atualizar);
+  atualizar();
+}
+// "Abateu: Pedido #1 ✓ R$ 7.803,00 · Pedido #2 R$ 1.197,00"
+function aplicacoesHTML(g) {
+  if (g.status !== 'Confirmado') return g.status === 'Aguardando confirmação' ? '<div class="aplicacoes muted">A baixa nos pedidos acontece quando a Fernandes Têxtil confirmar.</div>' : '';
+  if (!g.aplicacoes || (!g.aplicacoes.length && !g.credito)) return '';
+  return `<div class="aplicacoes">${g.aplicacoes.map(a => `<span class="${a.quitou ? 'quitou' : ''}">${a.quitou ? icone('check', 13) : ''}Pedido #${a.numero} · ${brl(a.valor)}${a.quitou ? ' · quitado' : ''}</span>`).join('')}${g.credito > 0.004 ? `<span>Crédito ${brl(g.credito)}</span>` : ''}</div>`;
+}
+// Envios de um pedido (parciais até completar), numerados do primeiro para o último
+function enviosHTML(p, ctx, { excluir = false } = {}) {
+  const falta = Math.max(0, p.qtd_total - p.qtd_entregue);
+  const resumo = `<div class="resumo-entrega"><div class="barra verde"><i style="width:${pct(p.qtd_entregue, p.qtd_total).toFixed(1)}%"></i></div>
+      <span>${qtd(p.qtd_entregue)} de ${qtd(p.qtd_total)} entregues${falta > 0 ? ` · <b style="color:var(--laranja)">faltam ${qtd(falta)}</b>` : ' · <b style="color:var(--verde)">completo</b>'}</span></div>`;
+  const total = p.entregas.length;
+  const lista = total ? p.entregas.map((e, i) => `<div class="cartao-sub">
+      <div class="cab-sub"><b><span class="envio-num">${total - i}º</span>${dataBR(e.data)} · ${qtd(e.quantidade)} peças</b>
+        ${excluir ? `<button class="btn btn-texto" style="color:var(--vermelho)" data-acao="excluir-envio" data-id="${e.id}">Excluir</button>` : ''}</div>
+      ${e.itens.length ? `<div class="linhas-cor">${e.itens.map(it => `<span>${it.cor ? dot(it.hex) + esc(it.cor) : esc(it.produto_nome)} <b>${qtd(it.quantidade)}</b></span>`).join('')}</div>` : ''}
+      ${e.observacao ? `<div class="txt">${esc(e.observacao)}</div>` : ''}
+      ${anexosHTML(e.anexos, 'entrega', e.id, ctx)}
+    </div>`).join('') : `<p class="muted" style="margin:0 4px">${excluir ? 'Nenhum envio ainda. Você pode enviar em partes até completar o pedido.' : 'Nenhuma entrega ainda. O pedido pode ser entregue em partes.'}</p>`;
+  return resumo + `<div style="margin-top:12px">${lista}</div>`;
+}
+// Pagamentos que deram baixa neste pedido
+function pagamentosDoPedidoHTML(p, recebimentos) {
+  const usados = recebimentos.map(g => ({ g, a: (g.aplicacoes || []).find(x => x.pedido_id === p.id) })).filter(x => x.a);
+  const resumo = `<div class="info-grade" style="margin-bottom:10px"><div><span>Pago</span><b style="color:var(--verde)">${brl(p.valor_pago)}</b></div>
+      <div><span>Falta pagar</span><b style="${p.falta_pagar > 0.004 ? 'color:var(--laranja)' : ''}">${p.falta_pagar > 0.004 ? brl(p.falta_pagar) : 'Nada ✓'}</b></div></div>`;
+  return resumo + (usados.length ? usados.map(({ g, a }) => `<div class="cartao-sub"><div class="cab-sub"><b>${brl(a.valor)}</b>${a.quitou ? '<span class="pill p-verde">Quitou</span>' : ''}</div>
+      <div class="txt">de um pagamento de ${brl(g.valor)} · ${esc(g.forma || '')} · ${dataBR(g.data)}</div></div>`).join('') : '');
+}
+const pillPagoPedido = p => (['Solicitado', 'Cancelado'].includes(p.status) ? '' : p.quitado ? '<span class="pill p-verde">Pago</span>' : p.valor_pago > 0 ? '<span class="pill p-laranja">Pago em parte</span>' : '');
+
+function formPagamentoHTML({ formas, pedidos = [], botao = 'Salvar', comPrevia = true, valor = '' }) {
   return `<form id="form-pagamento" class="form">
       <div class="grupo">
         <div class="duas">
@@ -290,10 +348,7 @@ function formPagamentoHTML({ formas, pedidos = [], pedidoId = null, botao = 'Sal
           <div class="campo"><label>Data</label><input type="date" name="data" value="${hojeISO()}" required></div>
         </div>
         ${formas ? `<div class="campo"><label>Forma de pagamento</label><select name="forma">${formas.map(f => `<option>${esc(f)}</option>`).join('')}</select></div>` : ''}
-        ${comPedido ? `<div class="campo"><label>Referente ao pedido</label><select name="pedido_id">
-          <option value="">Pagamento geral (sem pedido específico)</option>
-          ${pedidos.filter(p => !['Cancelado', 'Solicitado'].includes(p.status)).map(p => `<option value="${p.id}" ${p.id === pedidoId ? 'selected' : ''}>Pedido #${p.numero} — ${brl(p.valor_total)}${p.valor_pago > 0 ? ` (pago ${brl(p.valor_pago)})` : ''}</option>`).join('')}
-        </select></div>` : ''}
+        ${comPrevia ? '<div class="previa-baixa" id="previaBaixa"></div>' : ''}
         <div class="campo"><label>Observação</label><textarea name="observacao" rows="2" placeholder="Opcional"></textarea></div>
         ${campoArquivoHTML()}
       </div>
