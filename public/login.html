@@ -2,245 +2,117 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fernandes Têxtil — Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Entrar — Fernandes Têxtil</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <style>
-    body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #0f1923 0%, #1a2535 40%, #1a472a 100%);
-      padding: 20px;
-    }
-    .login-card {
-      background: #1a2535;
-      border-radius: 18px;
-      padding: 48px 40px;
-      width: 100%;
-      max-width: 380px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      border: 1px solid rgba(64,192,116,0.15);
-      animation: slideUp 0.5s ease;
-    }
-    .login-logo {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-    .login-logo .emoji {
-      font-size: 3.5rem;
-      display: block;
-      animation: float 3s ease-in-out infinite;
-    }
-    .login-logo h1 {
-      margin: 10px 0 4px;
-      font-size: 1.5rem;
-      color: #e8eaf0;
-      font-weight: 700;
-    }
-    .login-logo p {
-      color: #8a9bb0;
-      font-size: 0.9rem;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    .form-group label {
-      display: block;
-      color: #8a9bb0;
-      font-size: 0.85rem;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 13px 16px;
-      background: #0f1923;
-      border: 1.5px solid rgba(138,155,176,0.2);
-      border-radius: 10px;
-      color: #e8eaf0;
-      font-size: 1rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      box-sizing: border-box;
-    }
-    .form-group input:focus {
-      outline: none;
-      border-color: #40c074;
-      box-shadow: 0 0 0 3px rgba(64,192,116,0.1);
-    }
-    .btn-login {
-      width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #40c074, #2ea05f);
-      border: none;
-      border-radius: 10px;
-      color: #fff;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      letter-spacing: 0.3px;
-    }
-    .btn-login:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(64,192,116,0.3);
-    }
-    .btn-login:active { transform: translateY(0); }
-    .login-error {
-      background: rgba(220,53,69,0.15);
-      border: 1px solid rgba(220,53,69,0.3);
-      color: #ff6b7a;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-top: 16px;
-      font-size: 0.88rem;
-      text-align: center;
-      display: none;
-    }
-    .btn-login.loading {
-      opacity: 0.7;
-      pointer-events: none;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/estilo.css">
 </head>
 <body>
-  <div class="login-card">
-    <div class="login-logo">
-      <span class="emoji">🧵</span>
+  <main class="tela-login">
+    <form class="cartao-login" id="formLogin" autocomplete="on">
+      <span class="logo">F</span>
       <h1>Fernandes Têxtil</h1>
-      <p>Sistema de Gestão</p>
-    </div>
-    <div class="form-group">
-      <label>Usuário</label>
-      <input type="text" id="username" placeholder="Digite seu usuário" autofocus autocomplete="username">
-    </div>
-    <div class="form-group">
-      <label>Senha</label>
-      <input type="password" id="senha" placeholder="Digite sua senha" autocomplete="current-password">
-    </div>
-    <button class="btn-login" id="btnLogin" onclick="fazerLogin()">Entrar</button>
-    <div class="login-error" id="loginError"></div>
-  </div>
+      <p class="sub">Entre para controlar a operação.</p>
+      <div class="grupo-login">
+        <input id="username" name="username" placeholder="Usuário" autocomplete="username" autocapitalize="none" required>
+        <input id="senha" name="senha" type="password" placeholder="Senha" autocomplete="current-password" required>
+      </div>
+      <button class="btn" type="submit" id="btnLogin">Entrar</button>
+      <p class="erro" id="erroLogin" role="alert"></p>
+    </form>
 
-  <!-- Primeiro acesso com a senha de fábrica: troca obrigatória -->
-  <div class="login-card" id="cardTroca" style="display:none">
-    <div class="login-logo">
-      <span class="emoji">🔐</span>
+    <!-- Primeiro acesso com a senha de fábrica: troca obrigatória -->
+    <form class="cartao-login oculto" id="formTroca">
+      <span class="logo">F</span>
       <h1>Crie sua senha</h1>
-      <p>Você entrou com a senha de fábrica. Defina uma senha nova para continuar.</p>
-    </div>
-    <div class="form-group">
-      <label>Nova senha (mínimo 8 caracteres)</label>
-      <input type="password" id="novaSenha" placeholder="Nova senha" autocomplete="new-password">
-    </div>
-    <div class="form-group">
-      <label>Repita a nova senha</label>
-      <input type="password" id="novaSenha2" placeholder="Repita a nova senha" autocomplete="new-password">
-    </div>
-    <button class="btn-login" id="btnTroca" onclick="trocarSenha()">Salvar e entrar</button>
-    <div class="login-error" id="trocaError"></div>
-  </div>
+      <p class="sub">Você entrou com a senha de fábrica. Defina uma senha nova para continuar.</p>
+      <div class="grupo-login">
+        <input id="novaSenha" type="password" placeholder="Nova senha (mínimo 8 caracteres)" autocomplete="new-password" required>
+        <input id="novaSenha2" type="password" placeholder="Repita a nova senha" autocomplete="new-password" required>
+      </div>
+      <button class="btn" type="submit" id="btnTroca">Salvar e entrar</button>
+      <p class="erro" id="erroTroca" role="alert"></p>
+    </form>
+  </main>
 
   <script>
-    // Destino após o login (apenas caminhos internos, ex.: ?voltar=/portal)
-    const voltarParam = new URLSearchParams(location.search).get('voltar') || '';
-    const DESTINO = /^\/[a-zA-Z0-9\-_/.]*$/.test(voltarParam) && !voltarParam.startsWith('//') ? voltarParam : 'index.html';
+    // Destino após o login (apenas caminhos internos, ex.: ?voltar=/#pedidos)
+    const voltar = new URLSearchParams(location.search).get('voltar') || '';
+    const DESTINO = /^\/[a-zA-Z0-9\-_/.#]*$/.test(voltar) && !voltar.startsWith('//') ? voltar : '/';
+    let tokenTemporario = null;
 
-    // Se já tem token, redirecionar
-    const token = localStorage.getItem('ft_token');
-    if (token) {
-      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => r.ok ? window.location.href = DESTINO : null)
+    const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sem armazenamento */ } };
+    const lerToken = () => { try { return localStorage.getItem('ft_token'); } catch (e) { return null; } };
+
+    // Já está logado? Vai direto.
+    const existente = lerToken();
+    if (existente) {
+      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + existente } })
+        .then(r => { if (r.ok) location.replace(DESTINO); })
         .catch(() => {});
     }
 
-    document.getElementById('senha').addEventListener('keypress', e => {
-      if (e.key === 'Enter') fazerLogin();
-    });
-    document.getElementById('username').addEventListener('keypress', e => {
-      if (e.key === 'Enter') document.getElementById('senha').focus();
-    });
-
-    let tokenTemporario = null;
-
-    document.getElementById('novaSenha2').addEventListener('keypress', e => {
-      if (e.key === 'Enter') trocarSenha();
-    });
-
-    async function trocarSenha() {
-      const nova = document.getElementById('novaSenha').value;
-      const nova2 = document.getElementById('novaSenha2').value;
-      const btn = document.getElementById('btnTroca');
-      const err = document.getElementById('trocaError');
-      err.style.display = 'none';
-      const erro = msg => { err.textContent = msg; err.style.display = 'block'; };
-      if (nova.length < 8) return erro('A nova senha precisa ter pelo menos 8 caracteres');
-      if (nova !== nova2) return erro('As duas senhas não são iguais');
-      btn.classList.add('loading');
-      btn.textContent = 'Salvando...';
-      try {
-        const resp = await fetch('/api/auth/trocar-senha', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tokenTemporario },
-          body: JSON.stringify({ nova_senha: nova })
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Não foi possível trocar a senha');
-        localStorage.setItem('ft_token', data.token);
-        localStorage.setItem('ft_usuario', JSON.stringify(data.usuario));
-        window.location.href = DESTINO;
-      } catch (e) {
-        erro(e.message === 'Failed to fetch' ? 'Erro de conexão com o servidor' : e.message);
-        btn.classList.remove('loading');
-        btn.textContent = 'Salvar e entrar';
-      }
+    async function enviar(url, corpo, token) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(corpo) });
+      const dados = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(dados.error || 'Não foi possível entrar');
+      return dados;
     }
 
-    async function fazerLogin() {
-      const username = document.getElementById('username').value.trim();
-      const senha = document.getElementById('senha').value;
+    document.getElementById('formLogin').addEventListener('submit', async e => {
+      e.preventDefault();
       const btn = document.getElementById('btnLogin');
-      const err = document.getElementById('loginError');
-      err.style.display = 'none';
-      if (!username || !senha) {
-        err.textContent = 'Preencha usuário e senha';
-        err.style.display = 'block';
-        return;
-      }
-      btn.classList.add('loading');
-      btn.textContent = 'Entrando...';
+      const erro = document.getElementById('erroLogin');
+      erro.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Entrando…';
       try {
-        const resp = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, senha })
-        });
-        const data = await resp.json();
-        if (resp.ok && data.usuario && data.usuario.trocar_senha) {
-          tokenTemporario = data.token;
-          document.querySelector('.login-card').style.display = 'none';
-          document.getElementById('cardTroca').style.display = 'block';
+        const dados = await enviar('/api/auth/login', { username: document.getElementById('username').value.trim(), senha: document.getElementById('senha').value });
+        if (dados.usuario && dados.usuario.trocar_senha) {
+          tokenTemporario = dados.token;
+          document.getElementById('formLogin').classList.add('oculto');
+          document.getElementById('formTroca').classList.remove('oculto');
           document.getElementById('novaSenha').focus();
-        } else if (resp.ok) {
-          localStorage.setItem('ft_token', data.token);
-          localStorage.setItem('ft_usuario', JSON.stringify(data.usuario));
-          window.location.href = DESTINO;
         } else {
-          err.textContent = data.error || 'Erro ao fazer login';
-          err.style.display = 'block';
-          btn.classList.remove('loading');
-          btn.textContent = 'Entrar';
+          guardar('ft_token', dados.token);
+          guardar('ft_usuario', JSON.stringify(dados.usuario));
+          location.replace(DESTINO);
         }
-      } catch (e) {
-        err.textContent = 'Erro de conexão com o servidor';
-        err.style.display = 'block';
-        btn.classList.remove('loading');
+      } catch (err) {
+        erro.textContent = err.message === 'Failed to fetch' ? 'Sem conexão com o servidor' : err.message;
+      } finally {
+        btn.disabled = false;
         btn.textContent = 'Entrar';
       }
-    }
+    });
+
+    document.getElementById('formTroca').addEventListener('submit', async e => {
+      e.preventDefault();
+      const nova = document.getElementById('novaSenha').value;
+      const erro = document.getElementById('erroTroca');
+      erro.textContent = '';
+      if (nova.length < 8) { erro.textContent = 'A nova senha precisa ter pelo menos 8 caracteres'; return; }
+      if (nova !== document.getElementById('novaSenha2').value) { erro.textContent = 'As duas senhas não são iguais'; return; }
+      const btn = document.getElementById('btnTroca');
+      btn.disabled = true;
+      btn.textContent = 'Salvando…';
+      try {
+        const dados = await enviar('/api/auth/trocar-senha', { nova_senha: nova }, tokenTemporario);
+        guardar('ft_token', dados.token);
+        guardar('ft_usuario', JSON.stringify(dados.usuario));
+        location.replace(DESTINO);
+      } catch (err) {
+        erro.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = 'Salvar e entrar';
+      }
+    });
   </script>
 </body>
 </html>

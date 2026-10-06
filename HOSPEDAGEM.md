@@ -31,7 +31,7 @@ faça upgrade ou use uma VPS da Hostinger (veja "Outras opções").
    - `ADMIN_SENHA` = opcional; sem ela, o primeiro acesso é `admin` / `admin123`
 5. Publique (Deploy) e conecte um domínio ou subdomínio
    (ex.: `pedidos.seudominio.com.br`). O SSL/https é ativado no próprio hPanel.
-6. Acesse `https://pedidos.seudominio.com.br/portal` e entre com `admin` /
+6. Acesse `https://pedidos.seudominio.com.br/` e entre com `admin` /
    `admin123`. O sistema pede para criar a sua senha na hora.
 
 Onde ficam os dados na Hostinger: na pasta `fernandes-textil-dados`, dentro da
@@ -58,7 +58,7 @@ Custo aproximado: plano Hobby, cerca de US$ 5/mês (confira o preço atual no si
    **Mount path:** `/data`.
 5. Em **Settings → Networking**, clique em **Generate Domain**. O endereço
    gerado (ex.: `fernandes-textil.up.railway.app`) é o do seu sistema.
-6. Acesse `https://SEU-ENDERECO/portal`, entre com `admin` e a senha do passo 3,
+6. Acesse `https://SEU-ENDERECO/`, entre com `admin` e a senha do passo 3,
    cadastre o cliente e envie o link para ele.
 
 A cada `git push` no branch escolhido, o Railway publica a nova versão
@@ -73,7 +73,7 @@ O plano gratuito **não** serve, porque não tem disco persistente.
 2. **New + → Blueprint** e escolha o repositório. O `render.yaml` já configura
    o serviço, o disco em `/data` e a chave secreta.
 3. Informe o valor de `ADMIN_SENHA` quando for pedido e confirme.
-4. Use o endereço `https://….onrender.com/portal`.
+4. Use o endereço `https://….onrender.com/`.
 
 ## Outras opções (VPS, Fly.io etc.)
 
@@ -105,9 +105,9 @@ Para ter `https://`, coloque um proxy na frente (Caddy, Nginx ou Cloudflare).
 - Se o servidor já tinha um banco criado por uma versão anterior, o `admin` é
   redefinido para `admin123` **uma única vez**, na primeira inicialização desta
   versão. Depois que você troca a senha, ela não volta mais.
-- Os usuários `atendente` e `entregador` ficam **desativados** na hospedagem
-  até você definir uma senha para eles em **Usuários**.
-- Mudar `ADMIN_SENHA` depois não altera a senha: troque em **Usuários** no sistema.
+- O sistema tem um único usuário, o `admin`. Usuários de versões antigas
+  (atendente, entregador) ficam desativados.
+- Mudar `ADMIN_SENHA` depois não altera a senha: troque em **Ajustes → Alterar senha**.
 - O endereço `/saude` serve para a hospedagem saber se o sistema está no ar.
 
 ## Backup

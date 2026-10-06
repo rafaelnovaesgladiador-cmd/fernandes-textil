@@ -12,7 +12,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     PORT=3000
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json server.js portal.js ./
+COPY package.json server.js operacao.js ./
 COPY public ./public
 RUN mkdir -p /data
 EXPOSE 3000
