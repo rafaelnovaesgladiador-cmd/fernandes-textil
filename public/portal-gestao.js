@@ -17,6 +17,7 @@ const estado = {
   dados: null,
   aba: 'pedidos',
   abertos: new Set(),
+  solicitadosVistos: new Set(),
   vistoAte: null,
   destaqueAte: null
 };
@@ -32,6 +33,7 @@ function rota() {
     estado.clienteId = novoId;
     estado.dados = null;
     estado.abertos = new Set();
+    estado.solicitadosVistos = new Set();
     estado.aba = 'pedidos';
     estado.vistoAte = estado.destaqueAte = novoId ? local.ler(chaveVisto(novoId), null) : null;
   }
@@ -44,6 +46,13 @@ async function carregar() {
     if (estado.clienteId) {
       const primeiraVez = !estado.dados;
       estado.dados = await api(`/clientes/${estado.clienteId}/painel`);
+      // Pedidos solicitados pelo cliente aparecem abertos, com Aceitar/Recusar à mostra
+      for (const p of estado.dados.pedidos) {
+        if (p.status === 'Solicitado' && !estado.solicitadosVistos.has(p.id)) {
+          estado.solicitadosVistos.add(p.id);
+          estado.abertos.add(p.id);
+        }
+      }
       if (primeiraVez) {
         const emAndamento = estado.dados.pedidos.find(p => !['Entregue', 'Cancelado'].includes(p.status));
         if (emAndamento) estado.abertos.add(emAndamento.id);
@@ -89,6 +98,7 @@ function renderLista() {
         <div class="meta">
           <span class="badge ${c.resumo.saldo > 0.004 ? 'b-ambar' : 'b-verde'}">${c.resumo.saldo > 0.004 ? 'Deve ' + brl(c.resumo.saldo) : 'Em dia'}</span>
           <span class="badge b-azul">${c.resumo.pedidos_abertos} pedido(s) em aberto</span>
+          ${c.resumo.pedidos_solicitados ? `<span class="badge b-vermelho">${c.resumo.pedidos_solicitados} pedido(s) para aprovar</span>` : ''}
           ${c.resumo.pagamentos_pendentes ? `<span class="badge b-vermelho">${c.resumo.pagamentos_pendentes} pagamento(s) para confirmar</span>` : ''}
         </div></a></div>`).join('')
     : `<div class="vazio"><div class="ico">🤝</div><strong>Nenhum cliente no portal ainda</strong><br>
@@ -106,7 +116,11 @@ function ctxCliente() {
     arquivoUrl: id => `/api/p/${encodeURIComponent(d.cliente.token)}/arquivos/${id}`,
     nomeEmpresa: h => h.autor_nome || 'Fernandes Têxtil',
     vistoAte: estado.destaqueAte,
-    acoesPedido: p => `<div class="acoes">
+    acoesPedido: p => p.status === 'Solicitado' ? `<div class="acoes">
+        <button class="btn btn-ok" data-acao="aceitar-pedido" data-id="${p.id}">✓ Aceitar pedido</button>
+        <button class="btn btn-sec" data-acao="editar-pedido" data-id="${p.id}">Ajustar antes</button>
+        <button class="btn btn-perigo" data-acao="recusar-pedido" data-id="${p.id}">Recusar</button>
+      </div>` : `<div class="acoes">
         ${p.status !== 'Cancelado' && p.status !== 'Entregue' ? `<button class="btn" data-acao="nova-entrega" data-id="${p.id}">🚚 Registrar entrega</button>` : ''}
         <button class="btn btn-sec" data-acao="status" data-id="${p.id}">Mudar status</button>
         ${p.status !== 'Cancelado' ? `<button class="btn btn-sec" data-acao="novo-pagamento" data-id="${p.id}">💲 Pagamento</button>` : ''}
@@ -148,9 +162,14 @@ function renderCliente() {
 
   let corpo;
   if (estado.aba === 'pedidos') {
-    corpo = d.pedidos.length
-      ? d.pedidos.map(p => pedidoHTML(p, c)).join('')
-      : '<div class="vazio"><div class="ico">📦</div>Nenhum pedido ainda.<br>Toque em <strong>Novo pedido</strong> para registrar o primeiro.</div>';
+    const paraAprovar = d.pedidos.filter(p => p.status === 'Solicitado');
+    const demais = d.pedidos.filter(p => p.status !== 'Solicitado');
+    corpo = !d.pedidos.length
+      ? '<div class="vazio"><div class="ico">📦</div>Nenhum pedido ainda.<br>Toque em <strong>Novo pedido</strong> para registrar o primeiro.</div>'
+      : paraAprovar.length
+        ? `<div class="secao-titulo">Para aprovar</div>${paraAprovar.map(p => pedidoHTML(p, c)).join('')}` +
+          (demais.length ? `<div class="secao-titulo">Todos os pedidos</div>${demais.map(p => pedidoHTML(p, c)).join('')}` : '')
+        : demais.map(p => pedidoHTML(p, c)).join('');
   } else if (estado.aba === 'pagamentos') {
     const pend = d.pagamentos.filter(g => g.status === 'Aguardando confirmação');
     const outros = d.pagamentos.filter(g => g.status !== 'Aguardando confirmação');
@@ -164,7 +183,7 @@ function renderCliente() {
   }
 
   document.getElementById('conteudo').innerHTML = compartilhar + avisoProduto + resumoHTML(d.resumo) +
-    abasHTML(estado.aba, novidades, d.resumo.pagamentos_pendentes) + corpo;
+    abasHTML(estado.aba, novidades, d.resumo.pagamentos_pendentes, d.resumo.pedidos_solicitados) + corpo;
   if (estado.aba === 'pedidos') fab('Novo pedido', 'novo-pedido');
   else if (estado.aba === 'pagamentos') fab('Registrar pagamento', 'novo-pagamento');
   else fab(null);
@@ -411,6 +430,25 @@ const acoes = {
   'novo-produto'() { abrirFormProduto(null); },
   'editar-produto'(el) { abrirFormProduto(estado.dados.produtos.find(p => p.id === Number(el.dataset.id))); },
   'novo-pedido'() { abrirFormPedido(null); },
+  async 'aceitar-pedido'(el) {
+    const p = estado.dados.pedidos.find(x => x.id === Number(el.dataset.id));
+    if (!confirm(`Aceitar o pedido #${p.numero} (${brl(p.valor_total)})? O cliente verá como "Recebido".`)) return;
+    try {
+      await api(`/pedidos/${p.id}`, { metodo: 'PUT', corpo: { status: 'Recebido' } });
+      toast(`Pedido #${p.numero} aceito`);
+      await carregar();
+    } catch (e) { toast(e.message, 'erro'); }
+  },
+  async 'recusar-pedido'(el) {
+    const p = estado.dados.pedidos.find(x => x.id === Number(el.dataset.id));
+    const motivo = prompt(`Recusar o pedido #${p.numero}. Motivo (o cliente verá):`, 'Sem disponibilidade para o prazo solicitado');
+    if (motivo === null) return;
+    try {
+      await api(`/pedidos/${p.id}`, { metodo: 'PUT', corpo: { status: 'Cancelado', motivo } });
+      toast(`Pedido #${p.numero} recusado`);
+      await carregar();
+    } catch (e) { toast(e.message, 'erro'); }
+  },
   'editar-pedido'(el) { abrirFormPedido(estado.dados.pedidos.find(p => p.id === Number(el.dataset.id))); },
   status(el) {
     const p = estado.dados.pedidos.find(x => x.id === Number(el.dataset.id));

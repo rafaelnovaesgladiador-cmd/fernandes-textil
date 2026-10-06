@@ -152,7 +152,7 @@ async function comBotao(btn, fn) {
 
 // ---------- Status ----------
 const COR_STATUS = {
-  'Recebido': 'b-azul', 'Em produção': 'b-ambar', 'Pronto para entrega': 'b-roxo',
+  'Solicitado': 'b-ouro', 'Recebido': 'b-azul', 'Em produção': 'b-ambar', 'Pronto para entrega': 'b-roxo',
   'Entregue parcialmente': 'b-teal', 'Entregue': 'b-verde', 'Cancelado': 'b-cinza'
 };
 const COR_PAGAMENTO = { 'Confirmado': 'b-verde', 'Aguardando confirmação': 'b-ambar', 'Recusado': 'b-vermelho' };
@@ -161,6 +161,7 @@ const badgePagamento = s => `<span class="badge ${COR_PAGAMENTO[s] || 'b-cinza'}
 
 function etapasHTML(status) {
   if (status === 'Cancelado') return '';
+  if (status === 'Solicitado') return '<div class="aviso-sol">⏳ Pedido solicitado pelo cliente. Aguardando aprovação da Fernandes Têxtil.</div>';
   const etapas = ['Recebido', 'Em produção', 'Pronto', 'Entregue'];
   const idx = { 'Recebido': 0, 'Em produção': 1, 'Pronto para entrega': 2, 'Entregue parcialmente': 3, 'Entregue': 3 }[status] ?? 0;
   const completo = status === 'Entregue';
@@ -206,7 +207,7 @@ function pedidoHTML(p, ctx) {
   const un = unidadeDe(p);
   const pct = p.qtd_total > 0 ? Math.min(100, (p.qtd_entregue / p.qtd_total) * 100) : 0;
   const itensTxt = p.itens.map(i => `${qtd(i.quantidade)} ${esc(i.unidade)} · ${esc(i.produto_nome)}`).join(' + ');
-  const pagoTxt = p.status === 'Cancelado' ? '' : p.valor_pago >= p.valor_total - 0.004 && p.valor_total > 0 ? 'Quitado ✓' : p.valor_pago > 0 ? `Pago ${brl(p.valor_pago)}` : '';
+  const pagoTxt = p.status === 'Solicitado' ? 'valor estimado' : p.status === 'Cancelado' ? '' : p.valor_pago >= p.valor_total - 0.004 && p.valor_total > 0 ? 'Quitado ✓' : p.valor_pago > 0 ? `Pago ${brl(p.valor_pago)}` : '';
   const pagamentos = ctx.pagamentos.filter(g => g.pedido_id === p.id);
 
   let detalhe = '';
@@ -246,7 +247,7 @@ function pedidoHTML(p, ctx) {
       </div>
       <div class="valor"><strong class="num">${brl(p.valor_total)}</strong><small>${pagoTxt}</small><div class="seta">▼</div></div>
     </button>
-    ${p.status === 'Cancelado' ? '' : `<div class="progresso">
+    ${['Cancelado', 'Solicitado'].includes(p.status) ? '' : `<div class="progresso">
       <div class="trilho"><span style="width:${pct.toFixed(1)}%"></span></div>
       <div class="legenda"><span>Entregue ${qtd(p.qtd_entregue)} de ${qtd(p.qtd_total)} ${esc(un)}</span><span>${Math.floor(pct)}%</span></div>
     </div>`}
@@ -285,9 +286,9 @@ function historicoHTML(historico, ctx) {
   return html + '</div>';
 }
 
-function abasHTML(aba, novidades, pendentes) {
+function abasHTML(aba, novidades, pendentes, pedidosParaAprovar = 0) {
   const b = (id, rot, n) => `<button data-acao="aba" data-aba="${id}" class="${aba === id ? 'ativa' : ''}">${rot}${n ? `<span class="contador">${n > 99 ? '99+' : n}</span>` : ''}</button>`;
-  return `<nav class="abas">${b('pedidos', 'Pedidos')}${b('pagamentos', 'Pagamentos', pendentes)}${b('historico', 'Histórico', novidades)}</nav>`;
+  return `<nav class="abas">${b('pedidos', 'Pedidos', pedidosParaAprovar)}${b('pagamentos', 'Pagamentos', pendentes)}${b('historico', 'Histórico', novidades)}</nav>`;
 }
 
 function formPagamentoHTML(dados, { titulo, ajuda, pedidoId }) {

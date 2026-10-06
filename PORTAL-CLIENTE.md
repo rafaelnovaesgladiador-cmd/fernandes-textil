@@ -19,6 +19,7 @@ Para colocar na internet (necessário para o cliente abrir o link), veja [HOSPED
 
 | Fernandes Têxtil (`/portal`) | Cliente (link `/p/...`, sem senha) |
 |---|---|
+| Aceita (pode ajustar antes) ou recusa os pedidos solicitados pelo cliente | **Solicita pedidos** escolhendo produto e quantidade; pode cancelar enquanto não forem aceitos |
 | Registra pedidos e muda o status (Recebido → Em produção → Pronto → Entregue) | Vê os pedidos, o status e quanto já foi entregue |
 | Registra entregas (parciais ou totais) com foto do canhoto/nota | Vê as entregas e os comprovantes |
 | Registra pagamentos recebidos com comprovante | Informa um pagamento e envia o comprovante (fica "Aguardando confirmação") |
@@ -26,6 +27,8 @@ Para colocar na internet (necessário para o cliente abrir o link), veja [HOSPED
 | Anexa arquivos a pedidos, entregas e pagamentos | Anexa comprovantes a entregas e pagamentos |
 | Envia mensagens que aparecem no histórico | Envia mensagens que aparecem no histórico |
 
+- Pedido solicitado pelo cliente fica como **Solicitado** e só entra no saldo depois de aceito.
+  O preço vem sempre da tabela de produtos (o cliente não define preço).
 - O **histórico** registra tudo com data, hora e autor, e é o mesmo para os dois lados.
 - O status muda sozinho para **Entregue parcialmente** / **Entregue** conforme as entregas.
 - O saldo considera só pagamentos **confirmados**.

@@ -11,7 +11,8 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
-const STATUS_PEDIDO = ['Recebido', 'Em produção', 'Pronto para entrega', 'Entregue parcialmente', 'Entregue', 'Cancelado'];
+// "Solicitado" = pedido feito pelo cliente no link, aguardando aprovação da empresa
+const STATUS_PEDIDO = ['Solicitado', 'Recebido', 'Em produção', 'Pronto para entrega', 'Entregue parcialmente', 'Entregue', 'Cancelado'];
 const FORMAS_PAGAMENTO = ['Pix', 'Transferência', 'Boleto', 'Dinheiro', 'Cheque', 'Cartão', 'Outro'];
 const EMPRESA = 'Fernandes Têxtil';
 
@@ -251,7 +252,8 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
       g.pedido_numero = p ? p.numero : null;
     }
 
-    const validos = pedidos.filter(p => p.status !== 'Cancelado');
+    // Pedidos solicitados só passam a contar depois de aceitos
+    const validos = pedidos.filter(p => !['Cancelado', 'Solicitado'].includes(p.status));
     const totalPedidos = validos.reduce((s, p) => s + p.valor_total, 0);
     const totalPago = pagamentos.filter(g => g.status === 'Confirmado').reduce((s, g) => s + g.valor, 0);
     const resumo = {
@@ -260,7 +262,8 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
       saldo: totalPedidos - totalPago,
       pedidos_abertos: validos.filter(p => p.status !== 'Entregue').length,
       qtd_a_entregar: validos.reduce((s, p) => s + Math.max(0, p.qtd_total - p.qtd_entregue), 0),
-      pagamentos_pendentes: pagamentos.filter(g => g.status === 'Aguardando confirmação').length
+      pagamentos_pendentes: pagamentos.filter(g => g.status === 'Aguardando confirmação').length,
+      pedidos_solicitados: pedidos.filter(p => p.status === 'Solicitado').length
     };
     return { cliente, resumo, pedidos, entregas, pagamentos, historico, produtos, status_pedido: STATUS_PEDIDO, formas_pagamento: FORMAS_PAGAMENTO };
   }
@@ -458,7 +461,12 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
       if (req.body.status !== undefined && req.body.status !== p.status) {
         if (!STATUS_PEDIDO.includes(req.body.status)) throw new Error('Status inválido');
         db.prepare('UPDATE portal_pedidos SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.body.status, p.id);
-        registrar(p.cliente_id, { pedidoId: p.id, tipo: 'status', descricao: `Pedido #${p.numero}: ${p.status} → ${req.body.status}`, autorNome: req.usuario.nome });
+        const motivo = texto(req.body.motivo, 300);
+        let descricao = `Pedido #${p.numero}: ${p.status} → ${req.body.status}`;
+        if (p.status === 'Solicitado' && req.body.status === 'Cancelado') descricao = `Solicitação do pedido #${p.numero} recusada${motivo ? `: ${motivo}` : ''}`;
+        else if (p.status === 'Solicitado') descricao = `Pedido #${p.numero} aceito pela ${EMPRESA} (${req.body.status})`;
+        else if (motivo) descricao += `: ${motivo}`;
+        registrar(p.cliente_id, { pedidoId: p.id, tipo: 'status', descricao, autorNome: req.usuario.nome });
       } else if (req.body.itens) {
         const novo = atualizarStatusPorEntregas(p.id);
         if (novo) registrar(p.cliente_id, { pedidoId: p.id, tipo: 'status', descricao: `Pedido #${p.numero}: ${p.status} → ${novo}`, autorNome: req.usuario.nome });
@@ -491,6 +499,7 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
     const p = clienteDoPedido(req.params.id);
     if (!p) throw new Error('Pedido não encontrado');
     if (p.status === 'Cancelado') throw new Error('Pedido cancelado');
+    if (p.status === 'Solicitado') throw new Error('Aceite o pedido antes de registrar entregas');
     const quantidade = numero(req.body.quantidade);
     if (!(quantidade > 0)) throw new Error('Informe a quantidade entregue');
     const data = dataValida(req.body.data) || hoje();
@@ -709,6 +718,49 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
   router.post('/api/p/:token/anexos', porToken, receberArquivo, acao((req, res) => {
     const c = req.portalCliente;
     anexar(c.id, req, 'cliente', c.nome);
+    res.json({ success: true });
+  }));
+
+  // Cliente solicita um pedido (fica "Solicitado" até a empresa aceitar)
+  router.post('/api/p/:token/pedidos', porToken, acao((req, res) => {
+    const c = req.portalCliente;
+    const brutos = req.body.itens;
+    if (!Array.isArray(brutos) || !brutos.length) throw new Error('Escolha pelo menos um produto');
+    if (brutos.length > 20) throw new Error('Máximo de 20 itens por pedido');
+    // O cliente escolhe produto e quantidade; o preço vem sempre do cadastro
+    const itens = lerItens(c.id, brutos.map(i => {
+      const prod = db.prepare('SELECT * FROM portal_produtos WHERE id = ? AND cliente_id = ? AND ativo = 1').get(i.produto_id, c.id);
+      if (!prod) throw new Error('Produto indisponível. Atualize a página e tente de novo.');
+      const q = numero(i.quantidade);
+      if (!(q > 0) || q > 10000000) throw new Error('Quantidade inválida');
+      return { produto_id: prod.id, quantidade: q, preco_unitario: prod.preco };
+    }));
+    const desejada = dataValida(req.body.previsao_entrega);
+    const pedido = db.transaction(() => {
+      const prox = db.prepare('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM portal_pedidos WHERE cliente_id = ?').get(c.id).n;
+      const r = db.prepare('INSERT INTO portal_pedidos (cliente_id, numero, data_pedido, previsao_entrega, status, observacoes) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(c.id, prox, hoje(), desejada, 'Solicitado', texto(req.body.observacoes));
+      const id = Number(r.lastInsertRowid);
+      const { valor } = gravarItens(id, itens);
+      registrar(c.id, {
+        pedidoId: id, tipo: 'pedido', autor: 'cliente', autorNome: c.nome,
+        descricao: `Pedido #${prox} solicitado: ${resumoItens(itens)} — estimado ${brl(valor)}${desejada ? `. Entrega desejada: ${dataBR(desejada)}` : ''}. Aguardando aprovação.`
+      });
+      return { id, numero: prox, valor };
+    })();
+    notificar(c.id, { tipo: 'pedido', autor: 'cliente', descricao: `${c.nome} solicitou o pedido #${pedido.numero} (${resumoItens(itens)})` });
+    res.json(pedido);
+  }));
+
+  // Cliente cancela a própria solicitação enquanto ainda não foi aceita
+  router.post('/api/p/:token/pedidos/:id/cancelar', porToken, acao((req, res) => {
+    const c = req.portalCliente;
+    const p = db.prepare('SELECT * FROM portal_pedidos WHERE id = ? AND cliente_id = ?').get(req.params.id, c.id);
+    if (!p) return res.status(404).json({ error: 'Pedido não encontrado' });
+    if (p.status !== 'Solicitado') throw new Error('Este pedido já foi aceito. Fale com a Fernandes Têxtil para alterar.');
+    db.prepare("UPDATE portal_pedidos SET status = 'Cancelado', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(p.id);
+    registrar(c.id, { pedidoId: p.id, tipo: 'status', descricao: `Solicitação do pedido #${p.numero} cancelada pelo cliente`, autor: 'cliente', autorNome: c.nome });
+    notificar(c.id, { tipo: 'pedido', autor: 'cliente', descricao: `${c.nome} cancelou a solicitação do pedido #${p.numero}` });
     res.json({ success: true });
   }));
 
