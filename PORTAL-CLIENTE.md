@@ -3,6 +3,8 @@
 Módulo para acompanhar pedidos de um cliente específico (atacado) e compartilhar
 um link com ele. Funciona no celular e atualiza em tempo real dos dois lados.
 
+Para colocar na internet (necessário para o cliente abrir o link), veja [HOSPEDAGEM.md](HOSPEDAGEM.md).
+
 ## Como usar
 
 1. Rode o sistema normalmente: `npm install` e `npm start` (porta 3000).

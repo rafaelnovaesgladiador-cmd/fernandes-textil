@@ -15,7 +15,7 @@ const STATUS_PEDIDO = ['Recebido', 'Em produção', 'Pronto para entrega', 'Entr
 const FORMAS_PAGAMENTO = ['Pix', 'Transferência', 'Boleto', 'Dinheiro', 'Cheque', 'Cartão', 'Outro'];
 const EMPRESA = 'Fernandes Têxtil';
 
-module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT_SECRET, baseDir }) {
+module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT_SECRET, baseDir, dataDir = baseDir }) {
   const router = express.Router();
   const somenteGestao = [verifyToken, requirePerfil('admin', 'gerente')];
 
@@ -118,7 +118,7 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
   `);
 
   // ---------- UPLOADS ----------
-  const pastaUploads = path.join(baseDir, 'uploads', 'portal');
+  const pastaUploads = path.join(dataDir, 'uploads', 'portal');
   fs.mkdirSync(pastaUploads, { recursive: true });
   const MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'application/pdf'];
   const upload = multer({

@@ -5,24 +5,45 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+
+// --- CONFIGURAÇÃO (variáveis de ambiente) ---
+// PORT        porta HTTP (a hospedagem define sozinha)
+// DATA_DIR    pasta onde ficam o banco e os comprovantes (use um disco persistente)
+// JWT_SECRET  chave de assinatura do login (se vazia, é gerada e salva em DATA_DIR)
+// ADMIN_SENHA senha inicial do usuário "admin" (usada só na criação do banco)
+const PORT = Number(process.env.PORT) || 3000;
+const PRODUCAO = process.env.NODE_ENV === 'production';
+const DATA_DIR = path.resolve(process.env.DATA_DIR || __dirname);
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
+function carregarSegredo() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (!PRODUCAO) return 'fernandes_textil_secret_2024';
+  const arq = path.join(DATA_DIR, '.jwt_secret');
+  if (!fs.existsSync(arq)) fs.writeFileSync(arq, crypto.randomBytes(48).toString('hex'), { mode: 0o600 });
+  return fs.readFileSync(arq, 'utf8').trim();
+}
+const JWT_SECRET = carregarSegredo();
 
 const app = express();
-const PORT = 3000;
-const JWT_SECRET = 'fernandes_textil_secret_2024';
+app.set('trust proxy', 1);
 
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Ensure uploads dir exists
-if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
-}
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Health check para a hospedagem
+app.get('/saude', (req, res) => res.json({ ok: true }));
 
 // Database
-const db = new Database(path.join(__dirname, 'database.db'));
+const db = new Database(path.join(DATA_DIR, 'database.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -162,23 +183,38 @@ try { db.exec("ALTER TABLE pedidos ADD COLUMN vendedora_id INTEGER"); } catch(e)
 try { db.exec("ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'Dinheiro'"); } catch(e) {}
 
 // --- SEED ---
+// Em produção, usuários novos não recebem as senhas padrão conhecidas:
+// o admin usa ADMIN_SENHA (ou uma senha aleatória exibida no log) e
+// atendente/entregador ficam desativados até o admin definir uma senha.
 const seedUsuarios = () => {
   const users = [
     { nome: 'Rafael', username: 'admin', senha: 'fernandes2020', perfil: 'admin' },
     { nome: 'Atendente', username: 'atendente', senha: '123456', perfil: 'atendente' },
     { nome: 'Entregador', username: 'entregador', senha: '123456', perfil: 'entregador' },
   ];
-  const stmt = db.prepare('INSERT OR IGNORE INTO usuarios (nome, username, senha_hash, perfil) VALUES (?, ?, ?, ?)');
+  const existe = db.prepare('SELECT 1 FROM usuarios WHERE username = ?');
+  const stmt = db.prepare('INSERT INTO usuarios (nome, username, senha_hash, perfil, ativo) VALUES (?, ?, ?, ?, ?)');
   for (const u of users) {
-    const hash = bcrypt.hashSync(u.senha, 10);
-    stmt.run(u.nome, u.username, hash, u.perfil);
+    if (existe.get(u.username)) continue;
+    let senha = u.senha;
+    let ativo = 1;
+    if (PRODUCAO) {
+      if (u.username === 'admin') {
+        senha = process.env.ADMIN_SENHA || crypto.randomBytes(9).toString('base64url');
+        if (!process.env.ADMIN_SENHA) console.log(`🔑 Senha inicial do admin: ${senha}  (troque em Usuários após entrar)`);
+      } else {
+        senha = crypto.randomBytes(18).toString('hex');
+        ativo = 0;
+      }
+    }
+    stmt.run(u.nome, u.username, bcrypt.hashSync(senha, 10), u.perfil, ativo);
   }
 };
 seedUsuarios();
 
 // --- MULTER ---
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
@@ -862,9 +898,18 @@ app.get('/api/dashboard/vendedora', verifyToken, (req, res) => {
 });
 
 // ==================== PORTAL DO CLIENTE ====================
-app.use(require('./portal')({ db, verifyToken, requirePerfil, jwt, JWT_SECRET, baseDir: __dirname }));
+app.use(require('./portal')({ db, verifyToken, requirePerfil, jwt, JWT_SECRET, baseDir: __dirname, dataDir: DATA_DIR }));
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🧵 Fernandes Têxtil rodando na porta ${PORT}`);
+const servidor = app.listen(PORT, () => {
+  console.log(`🧵 Fernandes Têxtil rodando na porta ${PORT} (dados em ${DATA_DIR})`);
 });
+
+// Encerramento limpo ao reiniciar/publicar nova versão (garante o banco gravado)
+for (const sinal of ['SIGTERM', 'SIGINT']) {
+  process.on(sinal, () => {
+    servidor.close();
+    try { db.close(); } catch (e) { /* já fechado */ }
+    process.exit(0);
+  });
+}
