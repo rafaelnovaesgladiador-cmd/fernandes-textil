@@ -6,15 +6,18 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 
 // --- CONFIGURAÇÃO (variáveis de ambiente) ---
 // PORT        porta HTTP (a hospedagem define sozinha)
-// DATA_DIR    pasta onde ficam o banco e os comprovantes (use um disco persistente)
+// DATA_DIR    pasta onde ficam o banco e os comprovantes (use um disco persistente).
+//             Em produção, sem DATA_DIR, usa ~/fernandes-textil-dados (fora da pasta do app,
+//             para não ser apagada ao publicar nova versão)
 // JWT_SECRET  chave de assinatura do login (se vazia, é gerada e salva em DATA_DIR)
 // ADMIN_SENHA senha inicial do usuário "admin" (usada só na criação do banco)
 const PORT = Number(process.env.PORT) || 3000;
 const PRODUCAO = process.env.NODE_ENV === 'production';
-const DATA_DIR = path.resolve(process.env.DATA_DIR || __dirname);
+const DATA_DIR = path.resolve(process.env.DATA_DIR || (PRODUCAO ? path.join(os.homedir(), 'fernandes-textil-dados') : __dirname));
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 

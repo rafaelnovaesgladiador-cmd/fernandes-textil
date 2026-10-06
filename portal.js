@@ -146,10 +146,10 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
   function abrirStream(req, res, clienteId, token = null) {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.flushHeaders();
-    res.write('retry: 5000\n\n');
+    res.write('retry: 5000\nevent: ping\ndata: {}\n\n');
     const ouvinte = { clienteId, token, res };
     ouvintes.add(ouvinte);
-    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+    const ping = setInterval(() => res.write('event: ping\ndata: {}\n\n'), 20000);
     req.on('close', () => { clearInterval(ping); ouvintes.delete(ouvinte); });
   }
   function notificar(clienteId, evento) {

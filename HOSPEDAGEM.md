@@ -8,7 +8,41 @@ e `render.yaml`).
 > Use sempre uma hospedagem com **disco/volume persistente** montado em `/data`.
 > Sem isso, tudo é apagado a cada atualização.
 
-## Opção recomendada: Railway
+## Hostinger (Aplicativo Web Node.js)
+
+Funciona nos planos **Business Web Hosting** e **Cloud** (Startup, Professional,
+Enterprise). Os planos Single e Premium **não** rodam Node.js. Nesses casos,
+faça upgrade ou use uma VPS da Hostinger (veja "Outras opções").
+
+1. No hPanel: **Sites → Adicionar site → Aplicativo Web Node.js**
+   (o nome exato pode variar um pouco).
+2. Escolha **Importar do GitHub**, autorize sua conta e selecione o repositório
+   `fernandes-textil` e o branch (`main`, ou `claude/order-payment-tracking-system-iuxqlf`
+   se ainda não tiver feito o merge).
+   - Alternativa: **enviar arquivo ZIP** do projeto (sem a pasta `node_modules`).
+3. Configurações de build:
+   - **Framework:** Express.js (ou "Outro")
+   - **Versão do Node.js:** 22.x (20.x e 24.x também funcionam)
+   - **Arquivo de entrada:** `server.js`
+   - **Comando de início:** `npm start` (build: deixe o padrão / `npm install`)
+4. **Variáveis de ambiente**, antes de publicar:
+   - `NODE_ENV` = `production`
+   - `ADMIN_SENHA` = uma senha forte para o usuário `admin`
+5. Publique (Deploy) e conecte um domínio ou subdomínio
+   (ex.: `pedidos.seudominio.com.br`). O SSL/https é ativado no próprio hPanel.
+6. Acesse `https://pedidos.seudominio.com.br/portal` e entre com `admin` e a
+   senha do passo 4.
+
+Onde ficam os dados na Hostinger: na pasta `fernandes-textil-dados`, dentro da
+pasta principal da sua conta (fora da pasta do app). Assim eles não são apagados
+quando você publica uma nova versão. Para backup, baixe essa pasta pelo
+**Gerenciador de Arquivos** de vez em quando.
+
+> Se a hospedagem segurar a conexão de "tempo real", o sistema percebe e passa a
+> atualizar as telas sozinho a cada 15 segundos. O indicador mostra "Reconectando"
+> em vez de "Ao vivo", mas tudo continua funcionando.
+
+## Railway
 
 Custo aproximado: plano Hobby, cerca de US$ 5/mês (confira o preço atual no site).
 
@@ -57,7 +91,8 @@ Para ter `https://`, coloque um proxy na frente (Caddy, Nginx ou Cloudflare).
 | Variável | Para que serve | Padrão |
 |---|---|---|
 | `ADMIN_SENHA` | Senha inicial do `admin` (usada só na primeira vez que o banco é criado) | Se vazia, uma senha aleatória aparece no log |
-| `DATA_DIR` | Pasta do banco e dos comprovantes | `/data` no Docker |
+| `NODE_ENV` | Use `production` na hospedagem (ativa as proteções abaixo) | já vem no Docker |
+| `DATA_DIR` | Pasta do banco e dos comprovantes | `/data` no Docker; `~/fernandes-textil-dados` nos demais |
 | `JWT_SECRET` | Chave do login | Gerada sozinha e salva em `/data` |
 | `PORT` | Porta HTTP | Definida pela hospedagem |
 

@@ -334,19 +334,23 @@ function tituloAnexo(dados, tipo, id) {
 
 // ---------- Tempo real ----------
 // Abre uma conexão SSE; em caso de queda o navegador reconecta sozinho.
-// Também recarrega ao voltar para a aba e, como garantia, a cada 2 minutos.
+// O servidor manda um "ping" a cada 20 s: se nada chegar em 50 s (queda ou
+// hospedagem que segura a conexão), a tela passa a se atualizar a cada 15 s.
 function tempoReal(url, aoAtualizar, aoMudarConexao) {
   let es;
   let espera;
+  let ultimoSinal = 0;
+  const sinal = () => { ultimoSinal = Date.now(); aoMudarConexao(true); };
   const conectar = () => {
     if (es) es.close();
     es = new EventSource(url);
-    es.onopen = () => aoMudarConexao(true);
+    es.addEventListener('ping', sinal);
     es.onerror = () => {
       aoMudarConexao(false);
       if (es.readyState === EventSource.CLOSED) { clearTimeout(espera); espera = setTimeout(conectar, 8000); }
     };
     es.addEventListener('atualizacao', ev => {
+      sinal();
       let dados = {};
       try { dados = JSON.parse(ev.data); } catch (e) { /* ignora */ }
       aoAtualizar(dados);
@@ -359,7 +363,12 @@ function tempoReal(url, aoAtualizar, aoMudarConexao) {
       if (!es || es.readyState === EventSource.CLOSED) conectar();
     }
   });
-  setInterval(() => { if (document.visibilityState === 'visible') aoAtualizar({ silencioso: true }); }, 120000);
+  setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    const aoVivo = Date.now() - ultimoSinal < 50000;
+    aoMudarConexao(aoVivo);
+    if (!aoVivo) aoAtualizar({ silencioso: true });
+  }, 15000);
 }
 
 function indicadorAoVivo(on) {
