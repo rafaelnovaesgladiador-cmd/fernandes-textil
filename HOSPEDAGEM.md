@@ -5,8 +5,9 @@ estar hospedado. O projeto já vem pronto para isso (`Dockerfile`, `railway.json
 e `render.yaml`).
 
 > **Importante:** o sistema guarda o banco de dados e os comprovantes em disco.
-> Use sempre uma hospedagem com **disco/volume persistente** montado em `/data`.
-> Sem isso, tudo é apagado a cada atualização.
+> Na Hostinger isso já funciona sozinho (veja abaixo). No Railway, no Render e
+> com Docker, crie um **volume/disco persistente** montado em `/data`; sem ele,
+> tudo é apagado a cada atualização.
 
 ## Hostinger (Aplicativo Web Node.js)
 
@@ -93,7 +94,7 @@ Para ter `https://`, coloque um proxy na frente (Caddy, Nginx ou Cloudflare).
 | `ADMIN_SENHA` | Senha inicial do `admin` (usada só na primeira vez que o banco é criado) | Se vazia, uma senha aleatória aparece no log |
 | `NODE_ENV` | Use `production` na hospedagem (ativa as proteções abaixo) | já vem no Docker |
 | `DATA_DIR` | Pasta do banco e dos comprovantes | `/data` no Docker; `~/fernandes-textil-dados` nos demais |
-| `JWT_SECRET` | Chave do login | Gerada sozinha e salva em `/data` |
+| `JWT_SECRET` | Chave do login | Gerada sozinha e salva na pasta de dados |
 | `PORT` | Porta HTTP | Definida pela hospedagem |
 
 ## Segurança em produção
