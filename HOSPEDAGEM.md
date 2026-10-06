@@ -28,11 +28,11 @@ faça upgrade ou use uma VPS da Hostinger (veja "Outras opções").
    - **Comando de início:** `npm start` (build: deixe o padrão / `npm install`)
 4. **Variáveis de ambiente**, antes de publicar:
    - `NODE_ENV` = `production`
-   - `ADMIN_SENHA` = uma senha forte para o usuário `admin`
+   - `ADMIN_SENHA` = opcional; sem ela, o primeiro acesso é `admin` / `admin123`
 5. Publique (Deploy) e conecte um domínio ou subdomínio
    (ex.: `pedidos.seudominio.com.br`). O SSL/https é ativado no próprio hPanel.
-6. Acesse `https://pedidos.seudominio.com.br/portal` e entre com `admin` e a
-   senha do passo 4.
+6. Acesse `https://pedidos.seudominio.com.br/portal` e entre com `admin` /
+   `admin123`. O sistema pede para criar a sua senha na hora.
 
 Onde ficam os dados na Hostinger: na pasta `fernandes-textil-dados`, dentro da
 pasta principal da sua conta (fora da pasta do app). Assim eles não são apagados
@@ -91,7 +91,7 @@ Para ter `https://`, coloque um proxy na frente (Caddy, Nginx ou Cloudflare).
 
 | Variável | Para que serve | Padrão |
 |---|---|---|
-| `ADMIN_SENHA` | Senha inicial do `admin` (usada só na primeira vez que o banco é criado) | Se vazia, uma senha aleatória aparece no log |
+| `ADMIN_SENHA` | Senha inicial do `admin` (usada só na primeira vez que o banco é criado) | Se vazia: `admin123`, com troca obrigatória no 1º acesso |
 | `NODE_ENV` | Use `production` na hospedagem (ativa as proteções abaixo) | já vem no Docker |
 | `DATA_DIR` | Pasta do banco e dos comprovantes | `/data` no Docker; `~/fernandes-textil-dados` nos demais |
 | `JWT_SECRET` | Chave do login | Gerada sozinha e salva na pasta de dados |
@@ -99,8 +99,13 @@ Para ter `https://`, coloque um proxy na frente (Caddy, Nginx ou Cloudflare).
 
 ## Segurança em produção
 
-- As senhas padrão do código **não** valem na hospedagem: o `admin` usa
-  `ADMIN_SENHA`, e os usuários `atendente` e `entregador` ficam **desativados**
+- **Primeiro acesso:** usuário `admin`, senha de fábrica `admin123` (ou a de
+  `ADMIN_SENHA`, se você definiu). Com a senha de fábrica, o sistema obriga a
+  criar uma senha nova antes de liberar qualquer tela.
+- Se o servidor já tinha um banco criado por uma versão anterior, o `admin` é
+  redefinido para `admin123` **uma única vez**, na primeira inicialização desta
+  versão. Depois que você troca a senha, ela não volta mais.
+- Os usuários `atendente` e `entregador` ficam **desativados** na hospedagem
   até você definir uma senha para eles em **Usuários**.
 - Mudar `ADMIN_SENHA` depois não altera a senha: troque em **Usuários** no sistema.
 - O endereço `/saude` serve para a hospedagem saber se o sistema está no ar.

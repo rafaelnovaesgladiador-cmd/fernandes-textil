@@ -184,33 +184,45 @@ CREATE TABLE IF NOT EXISTS comissoes_config (
 // ALTER TABLE para novos campos (SQLite não suporta IF NOT EXISTS em ALTER)
 try { db.exec("ALTER TABLE pedidos ADD COLUMN vendedora_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'Dinheiro'"); } catch(e) {}
+try { db.exec("ALTER TABLE usuarios ADD COLUMN trocar_senha INTEGER DEFAULT 0"); } catch(e) {}
 
 // --- SEED ---
-// Em produção, usuários novos não recebem as senhas padrão conhecidas:
-// o admin usa ADMIN_SENHA (ou uma senha aleatória exibida no log) e
-// atendente/entregador ficam desativados até o admin definir uma senha.
+// Senha de fábrica do admin: "admin123" (ou ADMIN_SENHA), com troca obrigatória
+// no primeiro acesso. Em produção, atendente/entregador ficam desativados até o
+// admin definir uma senha para eles.
+const SENHA_FABRICA = 'admin123';
 const seedUsuarios = () => {
   const users = [
-    { nome: 'Rafael', username: 'admin', senha: 'fernandes2020', perfil: 'admin' },
+    { nome: 'Rafael', username: 'admin', senha: process.env.ADMIN_SENHA || SENHA_FABRICA, perfil: 'admin' },
     { nome: 'Atendente', username: 'atendente', senha: '123456', perfil: 'atendente' },
     { nome: 'Entregador', username: 'entregador', senha: '123456', perfil: 'entregador' },
   ];
   const existe = db.prepare('SELECT 1 FROM usuarios WHERE username = ?');
-  const stmt = db.prepare('INSERT INTO usuarios (nome, username, senha_hash, perfil, ativo) VALUES (?, ?, ?, ?, ?)');
+  const stmt = db.prepare('INSERT INTO usuarios (nome, username, senha_hash, perfil, ativo, trocar_senha) VALUES (?, ?, ?, ?, ?, ?)');
+  const adminJaExistia = !!existe.get('admin');
   for (const u of users) {
     if (existe.get(u.username)) continue;
     let senha = u.senha;
     let ativo = 1;
-    if (PRODUCAO) {
-      if (u.username === 'admin') {
-        senha = process.env.ADMIN_SENHA || crypto.randomBytes(9).toString('base64url');
-        if (!process.env.ADMIN_SENHA) console.log(`🔑 Senha inicial do admin: ${senha}  (troque em Usuários após entrar)`);
-      } else {
-        senha = crypto.randomBytes(18).toString('hex');
-        ativo = 0;
-      }
+    const trocar = u.username === 'admin' && senha === SENHA_FABRICA ? 1 : 0;
+    if (PRODUCAO && u.username !== 'admin') {
+      senha = crypto.randomBytes(18).toString('hex');
+      ativo = 0;
     }
-    stmt.run(u.nome, u.username, bcrypt.hashSync(senha, 10), u.perfil, ativo);
+    stmt.run(u.nome, u.username, bcrypt.hashSync(senha, 10), u.perfil, ativo, trocar);
+  }
+
+  // Liberação única: em bancos criados antes da senha de fábrica, o admin volta
+  // para "admin123" (com troca obrigatória) uma única vez. Depois que a senha for
+  // trocada, reiniciar ou publicar nova versão não mexe mais nela.
+  const marca = path.join(DATA_DIR, '.senha-fabrica-aplicada');
+  if (!fs.existsSync(marca)) {
+    if (adminJaExistia) {
+      db.prepare("UPDATE usuarios SET senha_hash = ?, ativo = 1, trocar_senha = 1 WHERE username = 'admin'")
+        .run(bcrypt.hashSync(SENHA_FABRICA, 10));
+      console.log('🔑 Acesso do admin redefinido para a senha de fábrica (admin / admin123). Troque no primeiro acesso.');
+    }
+    fs.writeFileSync(marca, new Date().toISOString());
   }
 };
 seedUsuarios();
@@ -232,6 +244,10 @@ function verifyToken(req, res, next) {
   try {
     const token = auth.split(' ')[1];
     req.usuario = jwt.verify(token, JWT_SECRET);
+    // Enquanto a senha de fábrica não for trocada, só a troca de senha é permitida
+    if (req.usuario.trocar_senha && req.path !== '/api/auth/trocar-senha') {
+      return res.status(403).json({ error: 'Troque a senha de fábrica para continuar', trocar_senha: true });
+    }
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Token inválido' });
@@ -258,6 +274,19 @@ app.post('/api/auth/login', (req, res) => {
   const user = db.prepare('SELECT * FROM usuarios WHERE username = ? AND ativo = 1').get(username);
   if (!user) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   if (!bcrypt.compareSync(senha, user.senha_hash)) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  const trocar = !!user.trocar_senha;
+  const token = jwt.sign({ id: user.id, nome: user.nome, perfil: user.perfil, username: user.username, ...(trocar ? { trocar_senha: true } : {}) }, JWT_SECRET, { expiresIn: trocar ? '1h' : '30d' });
+  res.json({ token, usuario: { id: user.id, nome: user.nome, perfil: user.perfil, username: user.username, trocar_senha: trocar } });
+});
+
+// Troca de senha do próprio usuário (obrigatória no primeiro acesso com a senha de fábrica)
+app.post('/api/auth/trocar-senha', verifyToken, (req, res) => {
+  const nova = String(req.body.nova_senha || '');
+  if (nova.length < 8) return res.status(400).json({ error: 'A nova senha precisa ter pelo menos 8 caracteres' });
+  if (nova === SENHA_FABRICA) return res.status(400).json({ error: 'Escolha uma senha diferente da senha de fábrica' });
+  const user = db.prepare('SELECT * FROM usuarios WHERE id = ? AND ativo = 1').get(req.usuario.id);
+  if (!user) return res.status(401).json({ error: 'Usuário não encontrado' });
+  db.prepare('UPDATE usuarios SET senha_hash = ?, trocar_senha = 0 WHERE id = ?').run(bcrypt.hashSync(nova, 10), user.id);
   const token = jwt.sign({ id: user.id, nome: user.nome, perfil: user.perfil, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, usuario: { id: user.id, nome: user.nome, perfil: user.perfil, username: user.username } });
 });
@@ -290,8 +319,8 @@ app.put('/api/usuarios/:id', verifyToken, requirePerfil('admin'), (req, res) => 
   const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
   const hash = senha ? bcrypt.hashSync(senha, 10) : user.senha_hash;
-  db.prepare('UPDATE usuarios SET nome=?, username=?, senha_hash=?, perfil=?, ativo=? WHERE id=?')
-    .run(nome || user.nome, username || user.username, hash, perfil || user.perfil, ativo !== undefined ? ativo : user.ativo, req.params.id);
+  db.prepare('UPDATE usuarios SET nome=?, username=?, senha_hash=?, perfil=?, ativo=?, trocar_senha=? WHERE id=?')
+    .run(nome || user.nome, username || user.username, hash, perfil || user.perfil, ativo !== undefined ? ativo : user.ativo, senha ? 0 : (user.trocar_senha || 0), req.params.id);
   res.json({ success: true });
 });
 

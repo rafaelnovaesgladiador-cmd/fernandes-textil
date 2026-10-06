@@ -651,7 +651,7 @@ module.exports = function criarPortal({ db, verifyToken, requirePerfil, jwt, JWT
   router.get('/api/portal/eventos', (req, res) => {
     try {
       const u = jwt.verify(String(req.query.t || ''), JWT_SECRET);
-      if (!['admin', 'gerente'].includes(u.perfil)) return res.status(403).end();
+      if (!['admin', 'gerente'].includes(u.perfil) || u.trocar_senha) return res.status(403).end();
     } catch (e) {
       return res.status(401).end();
     }
